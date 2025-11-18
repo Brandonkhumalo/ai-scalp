@@ -1,0 +1,165 @@
+================================================================================
+TRADE COMPARISON - PAST 5 DAYS
+================================================================================
+
+Report Generated: 2025-11-15 08:26:40
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-14
+--------------------------------------------------------------------------------
+Total Trades: 15
+Closed Trades: 15
+Win Rate: 0.0%
+Total P&L: $0.00
+Avg Profit per Trade: $0.00
+
+Trade Details:
+  1. NVDA     BUY  Entry: $184.20 -> Exit: $184.20 | P&L: +$0.00
+  2. WDC      BUY  Entry: $158.66 -> Exit: $158.66 | P&L: +$0.00
+  3. PLTR     BUY  Entry: $175.05 -> Exit: $175.05 | P&L: +$0.00
+  4. MU       BUY  Entry: $251.19 -> Exit: $251.19 | P&L: +$0.00
+  5. AAPL     BUY  Entry: $274.10 -> Exit: $274.10 | P&L: +$0.00
+  6. AMZN     BUY  Entry: $237.39 -> Exit: $237.39 | P&L: +$0.00
+  7. MSFT     BUY  Entry: $507.21 -> Exit: $507.21 | P&L: +$0.00
+  8. STX      BUY  Entry: $260.18 -> Exit: $260.18 | P&L: +$0.00
+  9. GEV      BUY  Entry: $584.13 -> Exit: $584.13 | P&L: +$0.00
+  10. LRCX     BUY  Entry: $152.37 -> Exit: $152.37 | P&L: +$0.00
+  11. GOOGL    BUY  Entry: $277.53 -> Exit: $277.53 | P&L: +$0.00
+  12. TSLA     BUY  Entry: $404.78 -> Exit: $404.78 | P&L: +$0.00
+  13. META     BUY  Entry: $610.35 -> Exit: $610.35 | P&L: +$0.00
+  14. HOOD     BUY  Entry: $125.50 -> Exit: $125.50 | P&L: +$0.00
+  15. STX      BUY  Entry: $263.20 -> Exit: $263.20 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-13
+--------------------------------------------------------------------------------
+Total Trades: 7
+Closed Trades: 7
+Win Rate: 0.0%
+Total P&L: $0.00
+Avg Profit per Trade: $0.00
+
+Trade Details:
+  1. MU       BUY  Entry: $245.55 -> Exit: $245.55 | P&L: +$0.00
+  2. AMZN     BUY  Entry: $242.32 -> Exit: $242.32 | P&L: +$0.00
+  3. HOOD     BUY  Entry: $125.42 -> Exit: $125.42 | P&L: +$0.00
+  4. MSFT     BUY  Entry: $511.42 -> Exit: $511.42 | P&L: +$0.00
+  5. GEV      BUY  Entry: $550.50 -> Exit: $550.50 | P&L: +$0.00
+  6. GOOGL    BUY  Entry: $278.39 -> Exit: $278.39 | P&L: +$0.00
+  7. MU       BUY  Entry: $239.38 -> Exit: $239.38 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-11
+--------------------------------------------------------------------------------
+Total Trades: 90
+Closed Trades: 90
+Win Rate: 44.4%
+Total P&L: $90.17
+Avg Profit per Trade: $1.00
+
+Trade Details:
+  1. TSLA     BUY  Entry: $435.00 -> Exit: $435.39 | P&L: +$25.35
+  2. AAPL     BUY  Entry: $273.14 -> Exit: $273.43 | P&L: +$26.97
+  3. GEV      BUY  Entry: $570.24 -> Exit: $572.29 | P&L: +$90.20
+  4. STX      BUY  Entry: $291.57 -> Exit: $291.57 | P&L: +$0.00
+  5. META     BUY  Entry: $624.04 -> Exit: $624.04 | P&L: +$0.00
+  6. AAPL     BUY  Entry: $273.82 -> Exit: $273.82 | P&L: +$0.00
+  7. TSLA     BUY  Entry: $436.23 -> Exit: $436.23 | P&L: +$0.00
+  8. GEV      BUY  Entry: $572.74 -> Exit: $572.74 | P&L: +$0.00
+  9. MSFT     BUY  Entry: $505.39 -> Exit: $505.39 | P&L: +$0.00
+  10. APP      BUY  Entry: $588.96 -> Exit: $588.96 | P&L: +$0.00
+  11. GOOGL    BUY  Entry: $289.15 -> Exit: $289.15 | P&L: +$0.00
+  12. META     BUY  Entry: $624.36 -> Exit: $624.36 | P&L: +$0.00
+  13. GEV      BUY  Entry: $573.89 -> Exit: $573.89 | P&L: +$0.00
+  14. AAPL     BUY  Entry: $274.58 -> Exit: $274.58 | P&L: +$0.00
+  15. APP      BUY  Entry: $590.18 -> Exit: $590.18 | P&L: +$0.00
+  16. STX      buy  Entry: $292.11 -> Exit: $285.45 | P&L: $-579.42
+  17. STX      buy  Entry: $286.20 -> Exit: $287.41 | P&L: +$2.42
+  18. STX      buy  Entry: $286.20 -> Exit: $287.41 | P&L: +$8.47
+  19. STX      buy  Entry: $286.20 -> Exit: $287.41 | P&L: +$56.87
+  20. TSLA     buy  Entry: $434.96 -> Exit: $435.29 | P&L: +$21.13
+  21. TSLA     buy  Entry: $436.02 -> Exit: $436.17 | P&L: +$7.20
+  22. TSLA     buy  Entry: $435.03 -> Exit: $435.57 | P&L: +$22.14
+  23. TSLA     buy  Entry: $435.82 -> Exit: $436.28 | P&L: +$7.82
+  24. TSLA     buy  Entry: $435.82 -> Exit: $436.28 | P&L: +$12.42
+  25. TSLA     buy  Entry: $435.82 -> Exit: $436.27 | P&L: +$0.45
+  26. META     buy  Entry: $624.13 -> Exit: $624.21 | P&L: +$2.08
+  27. META     buy  Entry: $624.13 -> Exit: $624.21 | P&L: +$0.88
+  28. META     buy  Entry: $624.13 -> Exit: $624.21 | P&L: +$0.32
+  29. META     buy  Entry: $624.41 -> Exit: $624.48 | P&L: +$0.28
+  30. META     buy  Entry: $624.41 -> Exit: $624.48 | P&L: +$2.31
+  31. GOOGL    buy  Entry: $289.30 -> Exit: $289.43 | P&L: +$9.10
+  32. GOOGL    buy  Entry: $289.30 -> Exit: $289.43 | P&L: +$2.47
+  33. AAPL     buy  Entry: $273.17 -> Exit: $273.34 | P&L: +$15.87
+  34. AAPL     buy  Entry: $273.81 -> Exit: $274.13 | P&L: +$9.60
+  35. AAPL     buy  Entry: $273.81 -> Exit: $274.13 | P&L: +$17.60
+  36. AAPL     buy  Entry: $274.60 -> Exit: $274.61 | P&L: +$0.22
+  37. AAPL     buy  Entry: $274.60 -> Exit: $274.61 | P&L: +$0.15
+  38. AAPL     buy  Entry: $274.60 -> Exit: $274.61 | P&L: +$0.31
+  39. GEV      buy  Entry: $570.47 -> Exit: $570.61 | P&L: +$6.16
+  40. GEV      buy  Entry: $572.66 -> Exit: $572.91 | P&L: +$7.50
+  41. GEV      buy  Entry: $572.66 -> Exit: $572.91 | P&L: +$0.25
+  42. GEV      buy  Entry: $572.66 -> Exit: $572.91 | P&L: +$1.00
+  43. GEV      buy  Entry: $572.66 -> Exit: $572.91 | P&L: +$0.25
+  44. GEV      buy  Entry: $573.90 -> Exit: $575.82 | P&L: +$40.32
+  45. GEV      buy  Entry: $573.90 -> Exit: $575.82 | P&L: +$17.28
+  46. GEV      buy  Entry: $573.90 -> Exit: $575.82 | P&L: +$9.60
+  47. GEV      buy  Entry: $573.90 -> Exit: $575.82 | P&L: +$1.92
+  48. APP      buy  Entry: $589.25 -> Exit: $590.08 | P&L: +$24.07
+  49. APP      buy  Entry: $590.77 -> Exit: $598.30 | P&L: +$105.42
+  50. APP      buy  Entry: $590.77 -> Exit: $598.30 | P&L: +$67.77
+  51. APP      buy  Entry: $590.77 -> Exit: $598.30 | P&L: +$37.65
+  52. MSFT     buy  Entry: $505.40 -> Exit: $505.61 | P&L: +$1.47
+  53. MSFT     buy  Entry: $505.40 -> Exit: $505.61 | P&L: +$6.30
+  54. GEV      SELL Entry: $576.71 -> Exit: $576.71 | P&L: +$0.00
+  55. TSLA     BUY  Entry: $437.17 -> Exit: $437.17 | P&L: +$0.00
+  56. MU       BUY  Entry: $242.65 -> Exit: $242.65 | P&L: +$0.00
+  57. META     BUY  Entry: $625.42 -> Exit: $625.42 | P&L: +$0.00
+  58. PLTR     BUY  Entry: $191.00 -> Exit: $191.00 | P&L: +$0.00
+  59. WDC      BUY  Entry: $172.94 -> Exit: $172.94 | P&L: +$0.00
+  60. GOOGL    BUY  Entry: $290.19 -> Exit: $290.19 | P&L: +$0.00
+  61. APP      BUY  Entry: $598.72 -> Exit: $598.72 | P&L: +$0.00
+  62. LRCX     BUY  Entry: $159.22 -> Exit: $159.22 | P&L: +$0.00
+  63. NVDA     BUY  Entry: $193.95 -> Exit: $193.95 | P&L: +$0.00
+  64. AMZN     BUY  Entry: $249.40 -> Exit: $249.40 | P&L: +$0.00
+  65. MSFT     BUY  Entry: $509.08 -> Exit: $509.08 | P&L: +$0.00
+  66. MU       BUY  Entry: $242.32 -> Exit: $242.32 | P&L: +$0.00
+  67. AAPL     BUY  Entry: $275.28 -> Exit: $275.28 | P&L: +$0.00
+  68. STX      BUY  Entry: $286.94 -> Exit: $286.94 | P&L: +$0.00
+  69. HOOD     BUY  Entry: $131.81 -> Exit: $131.81 | P&L: +$0.00
+  70. WDC      BUY  Entry: $172.53 -> Exit: $172.53 | P&L: +$0.00
+  71. STX      BUY  Entry: $287.08 -> Exit: $287.08 | P&L: +$0.00
+  72. APP      BUY  Entry: $601.66 -> Exit: $601.66 | P&L: +$0.00
+  73. META     BUY  Entry: $625.87 -> Exit: $625.87 | P&L: +$0.00
+  74. PLTR     BUY  Entry: $191.17 -> Exit: $191.17 | P&L: +$0.00
+  75. MU       BUY  Entry: $242.56 -> Exit: $242.56 | P&L: +$0.00
+  76. HOOD     BUY  Entry: $131.85 -> Exit: $131.85 | P&L: +$0.00
+  77. GEV      BUY  Entry: $576.60 -> Exit: $576.60 | P&L: +$0.00
+  78. META     BUY  Entry: $626.24 -> Exit: $626.24 | P&L: +$0.00
+  79. AMZN     BUY  Entry: $249.16 -> Exit: $249.16 | P&L: +$0.00
+  80. TSLA     BUY  Entry: $437.94 -> Exit: $437.94 | P&L: +$0.00
+  81. META     BUY  Entry: $626.74 -> Exit: $626.74 | P&L: +$0.00
+  82. GOOGL    BUY  Entry: $291.00 -> Exit: $291.00 | P&L: +$0.00
+  83. TSLA     BUY  Entry: $437.91 -> Exit: $437.91 | P&L: +$0.00
+  84. NVDA     BUY  Entry: $193.56 -> Exit: $193.56 | P&L: +$0.00
+  85. MSFT     BUY  Entry: $509.11 -> Exit: $509.11 | P&L: +$0.00
+  86. PLTR     BUY  Entry: $192.32 -> Exit: $192.32 | P&L: +$0.00
+  87. STX      BUY  Entry: $287.68 -> Exit: $287.68 | P&L: +$0.00
+  88. GOOGL    BUY  Entry: $291.57 -> Exit: $291.57 | P&L: +$0.00
+  89. META     BUY  Entry: $627.76 -> Exit: $627.76 | P&L: +$0.00
+  90. TSLA     BUY  Entry: $440.13 -> Exit: $440.13 | P&L: +$0.00
+
+================================================================================
+5-DAY SUMMARY
+================================================================================
+Total Trades: 112
+Profitable Trades: 40
+Losing Trades: 72
+Overall Win Rate: 35.7%
+Total Profit/Loss: $90.17
+Average per Trade: $0.81
+
+PERFORMANCE TREND:
+✗ DECLINING - Recent performance is worse than earlier days
+
+================================================================================

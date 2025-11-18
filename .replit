@@ -1,0 +1,115 @@
+modules = ["nodejs-20", "web", "python-3.11", "python3", "postgresql-16"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["glibcLocales"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "AI Trading Scheduler"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Django Web Server"
+
+[[workflows.workflow]]
+name = "AI Trading Scheduler"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py run_ai_trading"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Django Web Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:5000"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 5002
+externalPort = 8008
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[[ports]]
+localPort = 9000
+externalPort = 9000
+
+[[ports]]
+localPort = 34241
+externalPort = 4200
+
+[[ports]]
+localPort = 35057
+externalPort = 6800
+
+[[ports]]
+localPort = 36439
+externalPort = 8080
+
+[[ports]]
+localPort = 37189
+externalPort = 3002
+
+[[ports]]
+localPort = 38493
+externalPort = 8099
+
+[[ports]]
+localPort = 38567
+externalPort = 5173
+
+[[ports]]
+localPort = 39079
+externalPort = 8081
+
+[[ports]]
+localPort = 39519
+externalPort = 5000
+
+[[ports]]
+localPort = 40357
+externalPort = 3000
+
+[[ports]]
+localPort = 43909
+externalPort = 3001
+
+[[ports]]
+localPort = 44605
+externalPort = 6000
+
+[[ports]]
+localPort = 45309
+externalPort = 3003
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "start-production.sh"]
+build = ["bash", "build-production.sh"]

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Aggressive Cache Control - Force Fresh Content -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="app-version" content="__BUILD_VERSION__" />
+    
+    <title>ZimAI Trader - AI-Powered Trading for Zimbabwe</title>
+    <meta name="description" content="Smart trading platform powered by predictive AI. Trade Zimbabwe equities with confidence using advanced scalping algorithms and PayNow integration." />
+    <meta name="author" content="ZimAI Trader" />
+
+    <meta property="og:title" content="ZimAI Trader - AI-Powered Trading Platform" />
+    <meta property="og:description" content="Experience the future of trading with our predictive AI engine for Zimbabwe's equity markets" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    
+    <!-- Service Worker Cleanup - Remove any cached service workers -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            registration.unregister();
+            console.log('Service worker unregistered:', registration.scope);
+          }
+        });
+      }
+      
+      // Cache busting - Clear old caches on load
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (let name of names) {
+            caches.delete(name);
+          }
+        });
+      }
+      
+      // Version check - Force reload if version mismatch
+      const appVersion = '__BUILD_VERSION__';
+      const storedVersion = localStorage.getItem('app_version');
+      if (storedVersion && storedVersion !== appVersion) {
+        console.log('New version detected, clearing cache...');
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      localStorage.setItem('app_version', appVersion);
+    </script>
+    
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
