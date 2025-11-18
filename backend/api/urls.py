@@ -7,7 +7,7 @@ from .views import (
 )
 from .alpaca_service import AlpacaMarketDataView
 from .ai_trading_engine import AITradingView
-from .views_market import MarketDataView
+#from .views_market import MarketDataView
 from .views_ml import MLModelView
 from .admin_views import (
     get_all_users, approve_user, reject_user,
