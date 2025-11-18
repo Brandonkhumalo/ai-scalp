@@ -36,7 +36,8 @@ class Command(BaseCommand):
         while True:
             try:
                 # Find all users with AI trading enabled
-                users = User.objects.filter(ai_trading_enabled=True, usd_balance__gte=5)
+                # Note: Balance is tracked in Alpaca account, not in User model
+                users = User.objects.filter(ai_trading_enabled=True)
                 
                 if not users.exists():
                     self.stdout.write('⏸️  No users with AI trading enabled (waiting 30s...)')

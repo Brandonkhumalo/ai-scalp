@@ -863,7 +863,6 @@ class AITradingEngine:
                         'action': 'scalping_auto_close',
                         'closed_count': closed_count,
                         'total_realized_profit': float(total_realized_profit),
-                        'new_balance': float(user.usd_balance),
                         'close_details': close_details,
                         'message': f'Closed {closed_count} trades. Realized P&L: ${total_realized_profit:.2f}'
                     }
