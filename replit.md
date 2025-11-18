@@ -66,6 +66,10 @@ Preferred communication style: Simple, everyday language.
      * RSI > 70 (extremely overbought) → Forces SELL signal regardless of MACD disagreement
      * Overrides normal 2+ indicator agreement requirement in rare, high-probability reversal zones
      * Minimum 60% confidence for extreme RSI signals
+   - **Smart Position Sizing** (v4.2 - Nov 2025):
+     * Auto-adjusts position size to stay within 25% concentration limit per symbol
+     * Instead of blocking trades, reduces quantity to fit within risk limits
+     * Example: If 10% allocation would exceed 25% concentration, automatically reduces to maximum allowed quantity
    - **Trend Detection Filters** (v4.1 - Nov 2025):
      * EMA 50/200 crossover trend detection on 1-minute timeframe
      * SuperTrend indicator for momentum confirmation

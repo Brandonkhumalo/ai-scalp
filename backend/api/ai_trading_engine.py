@@ -994,26 +994,67 @@ class AITradingEngine:
             # Calculate total trade cost
             trade_cost = Decimal(str(quantity)) * Decimal(str(current_price))
             
-            # *** PORTFOLIO DIVERSITY CHECK ***
-            # Check if this trade would violate concentration limits (max 25% per symbol - TEMP OVERRIDE)
+            # *** PORTFOLIO DIVERSITY CHECK WITH AUTO-ADJUSTMENT ***
+            # Instead of blocking, reduce position size to fit within 25% limit
+            max_concentration_pct = 25
             concentration_check = self.check_position_concentration(
                 user=user,
                 symbol=symbol,
                 proposed_trade_value=float(trade_cost),
-                max_concentration_pct=25  # TEMPORARY: Increased to 25% to allow diversity building
+                max_concentration_pct=max_concentration_pct
             )
             
             if not concentration_check['allowed']:
-                logger.info(f'Trade rejected for {user.email}: {concentration_check["reason"]}')
-                return {
-                    'success': False,
-                    'message': concentration_check['reason'],
-                    'diversity_info': {
-                        'current_concentration': concentration_check['current_concentration'],
-                        'would_be_concentration': concentration_check['new_concentration'],
-                        'diversity_score': concentration_check['diversity_score']
+                # Calculate maximum allowed position value to stay at 25% concentration
+                portfolio = self.calculate_portfolio_concentration(user)
+                current_symbol_exposure = Decimal(str(portfolio['concentration'].get(symbol, 0))) * Decimal(str(portfolio.get('portfolio_value', 0))) / 100
+                
+                # Max allowed total exposure = 25% of account equity
+                max_allowed_exposure = Decimal(str(account_equity)) * Decimal(str(max_concentration_pct)) / 100
+                
+                # Max new trade value = max allowed - current exposure
+                max_new_trade_value = max_allowed_exposure - current_symbol_exposure
+                
+                if max_new_trade_value <= 0:
+                    logger.info(f'❌ Trade blocked for {user.email}: {symbol} already at or above {max_concentration_pct}% concentration')
+                    return {
+                        'success': False,
+                        'message': f'{symbol} already at maximum concentration ({concentration_check["current_concentration"]:.1f}%)',
+                        'diversity_info': {
+                            'current_concentration': concentration_check['current_concentration'],
+                            'would_be_concentration': concentration_check['new_concentration'],
+                            'diversity_score': concentration_check['diversity_score']
+                        }
                     }
-                }
+                
+                # Reduce quantity to fit within limit
+                adjusted_quantity = int(float(max_new_trade_value) / current_price)
+                
+                if adjusted_quantity <= 0:
+                    logger.info(f'❌ Trade blocked for {user.email}: Adjusted quantity too small ({adjusted_quantity} shares)')
+                    return {
+                        'success': False,
+                        'message': f'Cannot buy {symbol} - position too small after concentration limit adjustment',
+                        'diversity_info': {
+                            'current_concentration': concentration_check['current_concentration'],
+                            'max_allowed': max_concentration_pct,
+                            'diversity_score': concentration_check['diversity_score']
+                        }
+                    }
+                
+                # Update quantity and trade cost to adjusted values
+                quantity = adjusted_quantity
+                trade_cost = Decimal(str(quantity)) * Decimal(str(current_price))
+                
+                logger.info(f'📊 Position size adjusted for {symbol}: {int(position_value / current_price)} → {quantity} shares (staying within {max_concentration_pct}% limit)')
+                
+                # Re-check concentration with adjusted quantity
+                concentration_check = self.check_position_concentration(
+                    user=user,
+                    symbol=symbol,
+                    proposed_trade_value=float(trade_cost),
+                    max_concentration_pct=max_concentration_pct
+                )
             
             # *** CALCULATE STOP-LOSS AND TAKE-PROFIT ***
             # For BUY orders: stop_loss below entry, take_profit above
