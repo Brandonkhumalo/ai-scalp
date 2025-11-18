@@ -6,7 +6,7 @@ import { versionPlugin } from "./vite-plugin-version";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: '/static/',
+  base: mode === 'production' ? '/static/' : '/',
   server: {
     host: "0.0.0.0",
     port: 5000,

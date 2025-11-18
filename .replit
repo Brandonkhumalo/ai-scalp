@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "web", "python-3.11", "python3", "postgresql-16"]
+modules = ["nodejs-20", "python-3.11", "web"]
 [agent]
 expertMode = true
 
@@ -20,7 +20,11 @@ args = "AI Trading Scheduler"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Django Web Server"
+args = "Vite Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Django Backend"
 
 [[workflows.workflow]]
 name = "AI Trading Scheduler"
@@ -34,32 +38,36 @@ args = "cd backend && python manage.py run_ai_trading"
 outputType = "console"
 
 [[workflows.workflow]]
-name = "Django Web Server"
+name = "Vite Frontend"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd backend && python manage.py runserver 0.0.0.0:5000"
+args = "npm run dev"
 waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow]]
+name = "Django Backend"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:8000"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 5002
-externalPort = 8008
-
-[[ports]]
 localPort = 8000
 externalPort = 8000
-
-[[ports]]
-localPort = 9000
-externalPort = 9000
 
 [[ports]]
 localPort = 34241
