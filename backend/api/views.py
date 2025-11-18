@@ -624,6 +624,7 @@ class CloseProfitableTradesView(APIView):
                             Trade.objects.create(
                                 user=user,
                                 symbol=symbol,
+                                instrument_type='stock',
                                 side='buy' if side == 'long' else 'sell',
                                 quantity=qty,
                                 entry_price=avg_entry_price,
@@ -631,7 +632,7 @@ class CloseProfitableTradesView(APIView):
                                 profit_loss=unrealized_pl,
                                 status='closed',
                                 closed_at=timezone.now(),
-                                alpaca_order_id=order_result.get('id')
+                                broker_deal_id=order_result.get('id')
                             )
                             
                             # Create transaction record
