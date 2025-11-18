@@ -197,8 +197,8 @@ class AITradingEngine:
         try:
             market_service = MarketDataService()
             
-            # Get 15-minute bars for higher timeframe analysis
-            bars_15m = market_service.get_bars(symbol, timeframe='15Min', limit=200, use_fallback=True)
+            # Get 15-minute bars for higher timeframe analysis (400 bars = ~4 days for better EMA calculation)
+            bars_15m = market_service.get_bars(symbol, timeframe='15Min', limit=400, use_fallback=True)
             
             if not bars_15m or len(bars_15m) < 50:
                 logger.warning(f'Insufficient 15M data for trend check: {symbol}')
