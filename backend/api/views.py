@@ -548,10 +548,10 @@ class CloseProfitableTradesView(APIView):
                     'message': 'No open Alpaca positions found'
                 }, status=status.HTTP_200_OK)
             
-            # Filter profitable positions (unrealized_pl > 0)
+            # Filter positions with >=1% profit (scalping target)
             profitable_positions = [
                 pos for pos in positions 
-                if float(pos.get('unrealized_pl', 0)) > 0
+                if float(pos.get('unrealized_plpc', 0)) >= 0.01  # 1% profit threshold
             ]
             
             if not profitable_positions:
