@@ -201,6 +201,9 @@ class MLTradingModel:
         """Prepare features and labels from Trade model instances with loss pattern analysis"""
         trade_data = []
         
+        # Sort trades chronologically to ensure correct drawdown/streak calculations
+        trades = sorted(trades, key=lambda t: t.created_at or t.closed_at)
+        
         # Calculate drawdown and loss patterns for each trade
         cumulative_pnl = 0
         peak_equity = 0
