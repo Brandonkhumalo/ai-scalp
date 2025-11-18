@@ -1183,14 +1183,29 @@ class PerformanceAnalyticsView(APIView):
     """
     Calculate real performance analytics from Alpaca account activities
     Fetches closed positions and calculates accurate win rate, profit factor, ROI, etc.
+    Supports filtering by timeframe (e.g., last 15 minutes) via 'minutes' query parameter
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         from .alpaca_account_service import AlpacaAccountService
         from collections import defaultdict
+        from datetime import timedelta
+        from dateutil import parser as date_parser
         
         try:
+            # Get timeframe filter from query params (default: 15 minutes)
+            try:
+                timeframe_minutes = int(request.GET.get('minutes', 15))
+                if timeframe_minutes < 0:
+                    return Response({
+                        'error': 'minutes parameter must be a positive integer'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except (ValueError, TypeError):
+                return Response({
+                    'error': 'minutes parameter must be a valid integer'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             alpaca_service = AlpacaAccountService()
             
             # Fetch all account activities (trade fills)
@@ -1199,6 +1214,26 @@ class PerformanceAnalyticsView(APIView):
                 page_size=100,
                 direction='desc'
             )
+            
+            # Filter activities by timeframe
+            if activities and timeframe_minutes > 0:
+                cutoff_time = timezone.now() - timedelta(minutes=timeframe_minutes)
+                filtered_activities = []
+                for activity in activities:
+                    activity_time_str = activity.get('transaction_time')
+                    if activity_time_str:
+                        try:
+                            activity_time = date_parser.parse(activity_time_str)
+                            # Make activity_time timezone-aware if it's naive
+                            if activity_time.tzinfo is None:
+                                from datetime import timezone as dt_timezone
+                                activity_time = activity_time.replace(tzinfo=dt_timezone.utc)
+                            if activity_time >= cutoff_time:
+                                filtered_activities.append(activity)
+                        except Exception as e:
+                            logger.warning(f"Could not parse activity time: {activity_time_str}, error: {e}")
+                            continue
+                activities = filtered_activities
             
             if not activities:
                 return Response({

@@ -54,8 +54,8 @@ export const PerformanceAnalytics = () => {
   useEffect(() => {
     const loadMetrics = async () => {
       try {
-        // Fetch real performance metrics from Alpaca API
-        const response = await fetch('/api/performance-analytics/', {
+        // Fetch real performance metrics from Alpaca API (last 15 minutes only)
+        const response = await fetch('/api/performance-analytics/?minutes=15', {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
             'Content-Type': 'application/json'
