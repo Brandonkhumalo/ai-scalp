@@ -109,6 +109,122 @@ class AITradingEngine:
         
         return upper_band, sma, lower_band
     
+    def calculate_ema(self, prices, period):
+        """Calculate Exponential Moving Average"""
+        if len(prices) < period:
+            return None
+        
+        multiplier = 2 / (period + 1)
+        ema_values = [sum(prices[:period]) / period]
+        
+        for price in prices[period:]:
+            ema_values.append((price - ema_values[-1]) * multiplier + ema_values[-1])
+        
+        return ema_values[-1]
+    
+    def calculate_ema_trend(self, prices):
+        """
+        Calculate EMA 50/200 trend filter
+        Returns: 'uptrend', 'downtrend', or 'neutral'
+        """
+        if len(prices) < 200:
+            return 'neutral'  # Not enough data for trend detection
+        
+        ema_50 = self.calculate_ema(prices, 50)
+        ema_200 = self.calculate_ema(prices, 200)
+        
+        if ema_50 is None or ema_200 is None:
+            return 'neutral'
+        
+        # Golden cross (EMA 50 above EMA 200) = uptrend
+        if ema_50 > ema_200 * 1.01:  # 1% buffer to avoid whipsaws
+            return 'uptrend'
+        # Death cross (EMA 50 below EMA 200) = downtrend
+        elif ema_50 < ema_200 * 0.99:
+            return 'downtrend'
+        else:
+            return 'neutral'
+    
+    def calculate_supertrend(self, bars, period=10, multiplier=3):
+        """
+        Calculate SuperTrend indicator
+        Returns: 'uptrend', 'downtrend', current supertrend value
+        """
+        if len(bars) < period:
+            return 'neutral', None
+        
+        # Extract high, low, close prices
+        highs = [float(bar['h']) for bar in bars]
+        lows = [float(bar['l']) for bar in bars]
+        closes = [float(bar['c']) for bar in bars]
+        
+        # Calculate ATR (Average True Range)
+        true_ranges = []
+        for i in range(1, len(bars)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i-1]),
+                abs(lows[i] - closes[i-1])
+            )
+            true_ranges.append(tr)
+        
+        if len(true_ranges) < period:
+            return 'neutral', None
+        
+        # Simple moving average of true range
+        atr = sum(true_ranges[-period:]) / period
+        
+        # Calculate basic upper and lower bands
+        hl_avg = (highs[-1] + lows[-1]) / 2
+        basic_upper = hl_avg + (multiplier * atr)
+        basic_lower = hl_avg - (multiplier * atr)
+        
+        # Determine trend based on close price vs bands
+        current_price = closes[-1]
+        
+        if current_price > basic_upper:
+            return 'uptrend', basic_upper
+        elif current_price < basic_lower:
+            return 'downtrend', basic_lower
+        else:
+            return 'neutral', hl_avg
+    
+    def check_higher_timeframe_trend(self, symbol):
+        """
+        Check trend on higher timeframe (1 hour) to confirm overall direction
+        Returns: dict with trend info
+        """
+        try:
+            market_service = MarketDataService()
+            
+            # Get 1-hour bars for higher timeframe analysis
+            bars_1h = market_service.get_bars(symbol, timeframe='1Hour', limit=200, use_fallback=True)
+            
+            if not bars_1h or len(bars_1h) < 50:
+                logger.warning(f'Insufficient 1H data for trend check: {symbol}')
+                return {'trend': 'neutral', 'confidence': 0}
+            
+            # Extract prices from 1H timeframe
+            prices_1h = [float(bar['c']) for bar in bars_1h]
+            
+            # Calculate trend on 1H timeframe
+            ema_trend = self.calculate_ema_trend(prices_1h)
+            supertrend, supertrend_value = self.calculate_supertrend(bars_1h)
+            
+            # Combine both indicators for confirmation
+            if ema_trend == 'uptrend' and supertrend == 'uptrend':
+                return {'trend': 'uptrend', 'confidence': 0.9, 'ema_trend': ema_trend, 'supertrend': supertrend}
+            elif ema_trend == 'downtrend' and supertrend == 'downtrend':
+                return {'trend': 'downtrend', 'confidence': 0.9, 'ema_trend': ema_trend, 'supertrend': supertrend}
+            elif ema_trend == supertrend and ema_trend != 'neutral':
+                return {'trend': ema_trend, 'confidence': 0.7, 'ema_trend': ema_trend, 'supertrend': supertrend}
+            else:
+                return {'trend': 'neutral', 'confidence': 0.5, 'ema_trend': ema_trend, 'supertrend': supertrend}
+            
+        except Exception as e:
+            logger.error(f'Error checking higher timeframe trend: {str(e)}')
+            return {'trend': 'neutral', 'confidence': 0}
+    
     def analyze_market_sentiment(self, symbol, instrument_type='stock', use_training_data=False):
         """Analyze market sentiment using price action and volume with dual-source data"""
         try:
@@ -219,8 +335,13 @@ class AITradingEngine:
                 high_volatility, low_volatility,
                 volume_normalized,
                 rsi_macd_alignment, volatility_volume_ratio,
-                # Diversity features (6 more = 30 total) - use neutral defaults for prediction
-                0.5, 0.0, 0.0, 0.0, 0.0, 0.0  # Real values will be in training data
+                # Diversity features (6 features = 30 total) - use neutral defaults for prediction
+                0.5, 0.0, 0.0, 0.0, 0.0, 0.0,
+                # Loss pattern features (8 features = 38 total) - use neutral defaults for prediction
+                0, 0.0,  # is_in_drawdown, drawdown_severity
+                0, 1,    # is_volatility_spike, volatility_regime (1=medium default)
+                0, 0,    # is_high_loss_condition, recent_loss_streak
+                0, 0.0   # similar_past_losses, loss_pattern_score
             ]
             
             ml_prediction = ml_model.predict(ml_features)
@@ -245,6 +366,78 @@ class AITradingEngine:
             # Volume confirmation
             if volume_surge:
                 signal_strength += 20
+            
+            # *** TREND DETECTION FILTER ***
+            # Check higher timeframe trend before allowing trades
+            trend_filter_blocked = False
+            if not use_training_data:  # Only apply in live trading, not during ML training
+                higher_tf_trend = self.check_higher_timeframe_trend(symbol)
+                ema_trend_1min = self.calculate_ema_trend(prices)
+                supertrend_1min, _ = self.calculate_supertrend(bars)
+                
+                logger.info(f'{symbol} Trend Check - 1H: {higher_tf_trend["trend"]} (conf: {higher_tf_trend["confidence"]:.1%}), 1M EMA: {ema_trend_1min}, 1M SuperTrend: {supertrend_1min}')
+                
+                # Block trades if higher timeframe shows strong opposite trend
+                # This prevents buying in a downtrend or selling in an uptrend
+                if higher_tf_trend['confidence'] >= 0.7:
+                    if higher_tf_trend['trend'] == 'downtrend' and buy_signals > sell_signals:
+                        logger.warning(f'⛔ Trend Filter: Blocking BUY signal - 1H timeframe shows strong downtrend')
+                        trend_filter_blocked = True
+                        # Return no signal to hard-block the trade
+                        return {
+                            'signal': None,
+                            'confidence': 0,
+                            'momentum': momentum,
+                            'rsi': rsi,
+                            'macd': macd_line,
+                            'macd_signal': signal_line,
+                            'macd_histogram': histogram,
+                            'bb_upper': upper_band,
+                            'bb_middle': middle_band,
+                            'bb_lower': lower_band,
+                            'volume': avg_volume,
+                            'volume_surge': volume_surge,
+                            'volatility': volatility,
+                            'current_price': current_price,
+                            'ml_prediction': ml_prediction,
+                            'trend_filter': 'BLOCKED: 1H downtrend blocks BUY'
+                        }
+                    elif higher_tf_trend['trend'] == 'uptrend' and sell_signals > buy_signals:
+                        logger.warning(f'⛔ Trend Filter: Blocking SELL signal - 1H timeframe shows strong uptrend')
+                        trend_filter_blocked = True
+                        # Return no signal to hard-block the trade
+                        return {
+                            'signal': None,
+                            'confidence': 0,
+                            'momentum': momentum,
+                            'rsi': rsi,
+                            'macd': macd_line,
+                            'macd_signal': signal_line,
+                            'macd_histogram': histogram,
+                            'bb_upper': upper_band,
+                            'bb_middle': middle_band,
+                            'bb_lower': lower_band,
+                            'volume': avg_volume,
+                            'volume_surge': volume_surge,
+                            'volatility': volatility,
+                            'current_price': current_price,
+                            'ml_prediction': ml_prediction,
+                            'trend_filter': 'BLOCKED: 1H uptrend blocks SELL'
+                        }
+                
+                # Boost confidence for trades aligned with trend
+                if not trend_filter_blocked:
+                    if higher_tf_trend['trend'] == 'uptrend' and buy_signals > sell_signals:
+                        signal_strength += int(higher_tf_trend['confidence'] * 20)
+                        logger.info(f'✅ Trend Filter: BUY aligned with 1H uptrend - boosting confidence')
+                    elif higher_tf_trend['trend'] == 'downtrend' and sell_signals > buy_signals:
+                        signal_strength += int(higher_tf_trend['confidence'] * 20)
+                        logger.info(f'✅ Trend Filter: SELL aligned with 1H downtrend - boosting confidence')
+            else:
+                # For training data, store trend values for ML learning
+                higher_tf_trend = {'trend': 'neutral', 'confidence': 0}
+                ema_trend_1min = 'neutral'
+                supertrend_1min = 'neutral'
             
             # Determine final signal based on majority vote
             signal = None

@@ -22,8 +22,8 @@ class MLTradingModel:
         self.version_path = 'backend/ml_models/model_version.txt'
         self.min_trades_for_training = 5  # Start learning with 5 trades, improve as more data comes in
         self.retrain_interval_hours = 24
-        self.expected_features = 30  # Updated to 30 features (24 + 6 diversity features)
-        self.model_version = '3.0'  # Version 3.0 with 30 features (v2.0 had 24, v1.0 had 10)
+        self.expected_features = 38  # Updated to 38 features (30 + 8 advanced loss pattern features)
+        self.model_version = '4.0'  # Version 4.0 with 38 features (trend detection, drawdown, volatility spike, loss pattern learning)
         
         # Load training cutoff date from Django settings
         from django.conf import settings
@@ -83,7 +83,7 @@ class MLTradingModel:
             rsi_macd_alignment = 1 if (rsi < 30 and macd_bullish) or (rsi > 70 and not macd_bullish) else 0
             volatility_volume_ratio = volatility * volume_normalized if volume_normalized > 0 else 0
             
-            # Portfolio diversity features (6 new features)
+            # Portfolio diversity features (6 features)
             portfolio_diversity_score = trade.get('portfolio_diversity_score', 0.5)  # 0=concentrated, 1=diverse
             portfolio_max_concentration = trade.get('portfolio_max_concentration', 0) / 100  # Normalize to 0-1
             portfolio_unique_symbols = min(trade.get('portfolio_unique_symbols', 0) / 10, 1.0)  # Normalize (max 10)
@@ -91,11 +91,28 @@ class MLTradingModel:
             symbol_concentration_before = trade.get('symbol_concentration_before', 0) / 100  # Normalize to 0-1
             symbol_concentration_after = trade.get('symbol_concentration_after', 0) / 100  # Normalize to 0-1
             
+            # Advanced loss pattern features (8 features) - Learn from drawdown, volatility spikes, and losing patterns
+            # Drawdown zone detection (2 features)
+            is_in_drawdown = 1 if trade.get('max_drawdown_pct', 0) > 5 else 0  # In significant drawdown (>5%)
+            drawdown_severity = min(trade.get('max_drawdown_pct', 0) / 20, 1.0)  # Normalize drawdown (cap at 20%)
+            
+            # Volatility spike detection (2 features)
+            is_volatility_spike = 1 if volatility > 0.03 else 0  # Extreme volatility (>3%)
+            volatility_regime = 2 if volatility > 0.03 else (1 if volatility > 0.015 else 0)  # 0=low, 1=medium, 2=high
+            
+            # High-loss condition detection (2 features)
+            recent_loss_streak = trade.get('recent_loss_streak', 0)  # Number of recent consecutive losses
+            is_high_loss_condition = 1 if recent_loss_streak >= 2 else 0  # 2+ losses in a row = high risk
+            
+            # Past losing pattern similarity (2 features)
+            similar_past_losses = trade.get('similar_past_losses', 0)  # Count of similar losing trades
+            loss_pattern_score = min(similar_past_losses / 5, 1.0)  # Normalize (0-1, cap at 5 similar losses)
+            
             feature_vector = [
                 # Original features (10)
                 rsi, macd, macd_signal, bb_upper, bb_lower, bb_middle, 
                 volume, price_change, volatility, side,
-                # Advanced features (14 more = 24 total)
+                # Advanced features (14 = 24 total)
                 rsi_oversold, rsi_overbought, rsi_neutral,
                 macd_strength, macd_bullish,
                 bb_width, bb_position,
@@ -103,10 +120,15 @@ class MLTradingModel:
                 high_volatility, low_volatility,
                 volume_normalized,
                 rsi_macd_alignment, volatility_volume_ratio,
-                # Diversity features (6 more = 30 total)
+                # Diversity features (6 = 30 total)
                 portfolio_diversity_score, portfolio_max_concentration,
                 portfolio_unique_symbols, portfolio_total_positions,
-                symbol_concentration_before, symbol_concentration_after
+                symbol_concentration_before, symbol_concentration_after,
+                # Loss pattern learning features (8 = 38 total)
+                is_in_drawdown, drawdown_severity,
+                is_volatility_spike, volatility_regime,
+                is_high_loss_condition, recent_loss_streak,
+                similar_past_losses, loss_pattern_score
             ]
             features.append(feature_vector)
         
@@ -176,10 +198,15 @@ class MLTradingModel:
         return list(filtered)
     
     def prepare_training_data(self, trades):
-        """Prepare features and labels from Trade model instances"""
+        """Prepare features and labels from Trade model instances with loss pattern analysis"""
         trade_data = []
         
-        for trade in trades:
+        # Calculate drawdown and loss patterns for each trade
+        cumulative_pnl = 0
+        peak_equity = 0
+        recent_losses = []  # Track recent loss streak
+        
+        for i, trade in enumerate(trades):
             # Only include closed trades with profit/loss calculated
             if trade.status == 'closed' and trade.profit_loss is not None:
                 # Handle both dict (new format) and string (legacy format) ai_signal_type
@@ -201,8 +228,40 @@ class MLTradingModel:
                 bb_middle = signal_data.get('bb_middle', 1)
                 volatility = (bb_upper - bb_lower) / bb_middle if bb_middle > 0 else 0
                 
+                # Calculate loss pattern features
+                profit_loss = float(trade.profit_loss or 0)
+                cumulative_pnl += profit_loss
+                peak_equity = max(peak_equity, cumulative_pnl)
+                
+                # Calculate drawdown
+                drawdown = peak_equity - cumulative_pnl
+                max_drawdown_pct = (drawdown / peak_equity * 100) if peak_equity > 0 else 0
+                
+                # Calculate recent loss streak
+                if profit_loss <= 0:
+                    recent_losses.append(1)
+                else:
+                    recent_losses = []  # Reset streak on winning trade
+                
+                recent_loss_streak = len(recent_losses)
+                
+                # Calculate similar past losses (trades with similar RSI/volatility that lost money)
+                similar_past_losses = 0
+                rsi = signal_data.get('rsi', 50)
+                for past_idx in range(max(0, i - 20), i):  # Look at last 20 trades
+                    past_trade = trades[past_idx]
+                    if past_trade.status == 'closed' and past_trade.profit_loss is not None:
+                        if past_trade.profit_loss <= 0 and past_trade.ai_signal_type:
+                            past_signal = past_trade.ai_signal_type if isinstance(past_trade.ai_signal_type, dict) else {}
+                            past_rsi = past_signal.get('rsi', 50)
+                            past_vol = past_signal.get('volatility', 0)
+                            
+                            # Check if conditions are similar (RSI within 20 points, volatility within 50%)
+                            if abs(past_rsi - rsi) < 20 and abs(past_vol - volatility) < volatility * 0.5:
+                                similar_past_losses += 1
+                
                 trade_dict = {
-                    'rsi': signal_data.get('rsi', 50),
+                    'rsi': rsi,
                     'macd': signal_data.get('macd', 0),
                     'macd_signal': signal_data.get('macd_signal', 0),
                     'bb_upper': bb_upper,
@@ -212,7 +271,7 @@ class MLTradingModel:
                     'price_change': ((trade.exit_price or trade.entry_price) - trade.entry_price) / trade.entry_price if trade.entry_price else 0,
                     'volatility': volatility,
                     'side': trade.side,
-                    'profit_loss': trade.profit_loss,
+                    'profit_loss': profit_loss,
                     # Extract diversity metrics from signal_data
                     'portfolio_diversity_score': signal_data.get('portfolio_diversity_score', 0.5),
                     'portfolio_max_concentration': signal_data.get('portfolio_max_concentration', 0),
@@ -220,6 +279,10 @@ class MLTradingModel:
                     'portfolio_total_positions': signal_data.get('portfolio_total_positions', 0),
                     'symbol_concentration_before': signal_data.get('symbol_concentration_before', 0),
                     'symbol_concentration_after': signal_data.get('symbol_concentration_after', 0),
+                    # Loss pattern features
+                    'max_drawdown_pct': max_drawdown_pct,
+                    'recent_loss_streak': recent_loss_streak,
+                    'similar_past_losses': similar_past_losses,
                 }
                 trade_data.append(trade_dict)
         
@@ -278,7 +341,7 @@ class MLTradingModel:
         train_score = self.model.score(X_train_scaled, y_train)
         test_score = self.model.score(X_test_scaled, y_test)
         
-        # Get feature importances (30 features total)
+        # Get feature importances (38 features total)
         feature_names = [
             'RSI', 'MACD', 'MACD_Signal', 'BB_Upper', 'BB_Lower', 'BB_Middle', 
             'Volume', 'Price_Change', 'Volatility', 'Side',
@@ -291,7 +354,11 @@ class MLTradingModel:
             'RSI_MACD_Alignment', 'Volatility_Volume_Ratio',
             'Portfolio_Diversity_Score', 'Portfolio_Max_Concentration',
             'Portfolio_Unique_Symbols', 'Portfolio_Total_Positions',
-            'Symbol_Concentration_Before', 'Symbol_Concentration_After'
+            'Symbol_Concentration_Before', 'Symbol_Concentration_After',
+            'Is_In_Drawdown', 'Drawdown_Severity',
+            'Is_Volatility_Spike', 'Volatility_Regime',
+            'Is_High_Loss_Condition', 'Recent_Loss_Streak',
+            'Similar_Past_Losses', 'Loss_Pattern_Score'
         ]
         importances = dict(zip(feature_names, self.model.feature_importances_.tolist()))
         
