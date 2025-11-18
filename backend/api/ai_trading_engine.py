@@ -191,25 +191,25 @@ class AITradingEngine:
     
     def check_higher_timeframe_trend(self, symbol):
         """
-        Check trend on higher timeframe (1 hour) to confirm overall direction
+        Check trend on higher timeframe (15 minutes) to confirm overall direction
         Returns: dict with trend info
         """
         try:
             market_service = MarketDataService()
             
-            # Get 1-hour bars for higher timeframe analysis
-            bars_1h = market_service.get_bars(symbol, timeframe='1Hour', limit=200, use_fallback=True)
+            # Get 15-minute bars for higher timeframe analysis
+            bars_15m = market_service.get_bars(symbol, timeframe='15Min', limit=200, use_fallback=True)
             
-            if not bars_1h or len(bars_1h) < 50:
-                logger.warning(f'Insufficient 1H data for trend check: {symbol}')
+            if not bars_15m or len(bars_15m) < 50:
+                logger.warning(f'Insufficient 15M data for trend check: {symbol}')
                 return {'trend': 'neutral', 'confidence': 0}
             
-            # Extract prices from 1H timeframe
-            prices_1h = [float(bar['c']) for bar in bars_1h]
+            # Extract prices from 15M timeframe
+            prices_15m = [float(bar['c']) for bar in bars_15m]
             
-            # Calculate trend on 1H timeframe
-            ema_trend = self.calculate_ema_trend(prices_1h)
-            supertrend, supertrend_value = self.calculate_supertrend(bars_1h)
+            # Calculate trend on 15M timeframe
+            ema_trend = self.calculate_ema_trend(prices_15m)
+            supertrend, supertrend_value = self.calculate_supertrend(bars_15m)
             
             # Combine both indicators for confirmation
             if ema_trend == 'uptrend' and supertrend == 'uptrend':
@@ -375,13 +375,13 @@ class AITradingEngine:
                 ema_trend_1min = self.calculate_ema_trend(prices)
                 supertrend_1min, _ = self.calculate_supertrend(bars)
                 
-                logger.info(f'{symbol} Trend Check - 1H: {higher_tf_trend["trend"]} (conf: {higher_tf_trend["confidence"]:.1%}), 1M EMA: {ema_trend_1min}, 1M SuperTrend: {supertrend_1min}')
+                logger.info(f'{symbol} Trend Check - 15M: {higher_tf_trend["trend"]} (conf: {higher_tf_trend["confidence"]:.1%}), 1M EMA: {ema_trend_1min}, 1M SuperTrend: {supertrend_1min}')
                 
                 # Block trades if higher timeframe shows strong opposite trend
                 # This prevents buying in a downtrend or selling in an uptrend
                 if higher_tf_trend['confidence'] >= 0.7:
                     if higher_tf_trend['trend'] == 'downtrend' and buy_signals > sell_signals:
-                        logger.warning(f'⛔ Trend Filter: Blocking BUY signal - 1H timeframe shows strong downtrend')
+                        logger.warning(f'⛔ Trend Filter: Blocking BUY signal - 15M timeframe shows strong downtrend')
                         trend_filter_blocked = True
                         # Return no signal to hard-block the trade
                         return {
@@ -400,10 +400,10 @@ class AITradingEngine:
                             'volatility': volatility,
                             'current_price': current_price,
                             'ml_prediction': ml_prediction,
-                            'trend_filter': 'BLOCKED: 1H downtrend blocks BUY'
+                            'trend_filter': 'BLOCKED: 15M downtrend blocks BUY'
                         }
                     elif higher_tf_trend['trend'] == 'uptrend' and sell_signals > buy_signals:
-                        logger.warning(f'⛔ Trend Filter: Blocking SELL signal - 1H timeframe shows strong uptrend')
+                        logger.warning(f'⛔ Trend Filter: Blocking SELL signal - 15M timeframe shows strong uptrend')
                         trend_filter_blocked = True
                         # Return no signal to hard-block the trade
                         return {
@@ -422,17 +422,17 @@ class AITradingEngine:
                             'volatility': volatility,
                             'current_price': current_price,
                             'ml_prediction': ml_prediction,
-                            'trend_filter': 'BLOCKED: 1H uptrend blocks SELL'
+                            'trend_filter': 'BLOCKED: 15M uptrend blocks SELL'
                         }
                 
                 # Boost confidence for trades aligned with trend
                 if not trend_filter_blocked:
                     if higher_tf_trend['trend'] == 'uptrend' and buy_signals > sell_signals:
                         signal_strength += int(higher_tf_trend['confidence'] * 20)
-                        logger.info(f'✅ Trend Filter: BUY aligned with 1H uptrend - boosting confidence')
+                        logger.info(f'✅ Trend Filter: BUY aligned with 15M uptrend - boosting confidence')
                     elif higher_tf_trend['trend'] == 'downtrend' and sell_signals > buy_signals:
                         signal_strength += int(higher_tf_trend['confidence'] * 20)
-                        logger.info(f'✅ Trend Filter: SELL aligned with 1H downtrend - boosting confidence')
+                        logger.info(f'✅ Trend Filter: SELL aligned with 15M downtrend - boosting confidence')
             else:
                 # For training data, store trend values for ML learning
                 higher_tf_trend = {'trend': 'neutral', 'confidence': 0}

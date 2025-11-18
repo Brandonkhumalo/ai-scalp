@@ -61,10 +61,10 @@ Preferred communication style: Simple, everyday language.
 
 1. **AI Trading Engine** (`ai_trading_engine.py`):
    - Executes trades based on ML predictions and technical indicators (RSI, MACD, Bollinger Bands)
-   - **Trend Detection Filters** (v4.0 - Nov 2025):
+   - **Trend Detection Filters** (v4.1 - Nov 2025):
      * EMA 50/200 crossover trend detection on 1-minute timeframe
      * SuperTrend indicator for momentum confirmation
-     * Higher timeframe (1H) trend check blocks trades against strong trends (70%+ confidence)
+     * Higher timeframe (15M) trend check blocks trades against strong trends (70%+ confidence)
      * Hard-blocks prevent execution when signals contradict major trend direction
    - Integrates with Alpaca trading API for order execution
    - Implements advanced risk management (position sizing, stop-loss, take-profit, trailing stops)
