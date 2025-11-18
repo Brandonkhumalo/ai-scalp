@@ -367,6 +367,26 @@ class AITradingEngine:
             if volume_surge:
                 signal_strength += 20
             
+            # *** RSI OVERRIDE: Extreme RSI values override MACD disagreement ***
+            # RSI < 30 = extremely oversold (rare, high-probability reversal zone)
+            # RSI > 70 = extremely overbought (rare, high-probability reversal zone)
+            # These zones are so strong they override conflicting MACD signals
+            rsi_override_applied = False
+            if rsi < 30:
+                # Force BUY signal even if MACD disagrees
+                buy_signals = max(buy_signals, 2)  # Ensure minimum 2 signals for execution
+                sell_signals = 0  # Clear conflicting sell signals
+                signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme oversold
+                rsi_override_applied = True
+                logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} < 30 (EXTREMELY OVERSOLD) → Forcing BUY signal')
+            elif rsi > 70:
+                # Force SELL signal even if MACD disagrees
+                sell_signals = max(sell_signals, 2)  # Ensure minimum 2 signals for execution
+                buy_signals = 0  # Clear conflicting buy signals
+                signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme overbought
+                rsi_override_applied = True
+                logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} > 70 (EXTREMELY OVERBOUGHT) → Forcing SELL signal')
+            
             # *** TREND DETECTION FILTER ***
             # Check higher timeframe trend before allowing trades
             trend_filter_blocked = False
