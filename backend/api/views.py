@@ -1355,7 +1355,8 @@ def get_all_data(request):
     )
 
 from rest_framework.decorators import api_view
-from datetime import datetime, timezone
+from datetime import datetime
+import datetime as dt
 from rest_framework.decorators import api_view, permission_classes
 @api_view(['DELETE'])
 @permission_classes([AllowAny])
@@ -1366,7 +1367,7 @@ def delete_old_trades_and_show_wins(request):
     """
 
     # Target cutoff timestamp
-    cutoff_date = datetime(2025, 11, 11, tzinfo=timezone.utc)
+    cutoff_date = datetime(2025, 11, 11, tzinfo=dt.timezone.utc)
 
     # Count trades to delete
     to_delete_count = Trade.objects.filter(created_at__lt=cutoff_date).count()
