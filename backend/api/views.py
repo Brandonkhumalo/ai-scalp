@@ -1181,61 +1181,20 @@ class AlpacaAccountView(APIView):
 
 class PerformanceAnalyticsView(APIView):
     """
-    Calculate real performance analytics from Alpaca account activities
-    Fetches closed positions and calculates accurate win rate, profit factor, ROI, etc.
-    Supports filtering by timeframe (e.g., last 15 minutes) via 'minutes' query parameter
+    Calculate performance analytics from local database trades
+    Shows only trades executed through the ZimAI platform (post-algorithm update)
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        from collections import defaultdict
-        from datetime import timedelta
-        from dateutil import parser as date_parser
-        
         try:
-            # Get timeframe filter from query params (default: 15 minutes)
-            try:
-                timeframe_minutes = int(request.GET.get('minutes', 15))
-                if timeframe_minutes < 0:
-                    return Response({
-                        'error': 'minutes parameter must be a positive integer'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            except (ValueError, TypeError):
-                return Response({
-                    'error': 'minutes parameter must be a valid integer'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            # Fetch closed trades from local database
+            closed_trades = Trade.objects.filter(
+                user=request.user,
+                closed_at__isnull=False
+            ).order_by('-closed_at')
             
-            alpaca_service = AlpacaAccountService()
-            
-            # Fetch all account activities (trade fills)
-            activities = alpaca_service.get_account_activities(
-                activity_types='FILL',
-                page_size=100,
-                direction='desc'
-            )
-            
-            # Filter activities by timeframe
-            if activities and timeframe_minutes > 0:
-                cutoff_time = timezone.now() - timedelta(minutes=timeframe_minutes)
-                filtered_activities = []
-                for activity in activities:
-                    activity_time_str = activity.get('transaction_time')
-                    if activity_time_str:
-                        try:
-                            activity_time = date_parser.parse(activity_time_str)
-                            # Make activity_time timezone-aware if it's naive
-                            if activity_time.tzinfo is None:
-                                from datetime import timezone as dt_timezone
-                                activity_time = activity_time.replace(tzinfo=dt_timezone.utc)
-                            if activity_time >= cutoff_time:
-                                filtered_activities.append(activity)
-                        except Exception as e:
-                            logger.warning(f"Could not parse activity time: {activity_time_str}, error: {e}")
-                            continue
-                activities = filtered_activities
-            
-            if not activities:
+            if not closed_trades.exists():
                 return Response({
                     'totalTrades': 0,
                     'winningTrades': 0,
@@ -1253,76 +1212,27 @@ class PerformanceAnalyticsView(APIView):
                     'roi': 0
                 }, status=status.HTTP_200_OK)
             
-            # Group activities by symbol to match buy/sell pairs
-            symbol_trades = defaultdict(list)
-            for activity in activities:
-                symbol = activity.get('symbol')
-                if symbol:
-                    symbol_trades[symbol].append({
-                        'side': activity.get('side'),  # 'buy' or 'sell'
-                        'qty': float(activity.get('qty', 0)),
-                        'price': float(activity.get('price', 0)),
-                        'timestamp': activity.get('transaction_time'),
-                        'id': activity.get('id')
-                    })
+            # Calculate metrics from local trades
+            winning_trades = []
+            losing_trades = []
+            total_hold_time = 0
             
-            # Calculate P&L for each closed position
-            closed_positions = []
-            
-            for symbol, trades in symbol_trades.items():
-                # Sort by timestamp (oldest first)
-                trades.sort(key=lambda x: x['timestamp'])
+            for trade in closed_trades:
+                pl = float(trade.profit_loss) if trade.profit_loss else 0
                 
-                # Track open position
-                position_qty = 0
-                position_cost = 0
-                entry_time = None
+                if pl > 0:
+                    winning_trades.append(pl)
+                elif pl < 0:
+                    losing_trades.append(abs(pl))
                 
-                for trade in trades:
-                    if trade['side'] == 'buy':
-                        # Add to position
-                        position_cost += trade['qty'] * trade['price']
-                        position_qty += trade['qty']
-                        if entry_time is None:
-                            entry_time = trade['timestamp']
-                    else:  # sell
-                        # Close position (full or partial)
-                        if position_qty > 0:
-                            sell_qty = min(trade['qty'], position_qty)
-                            avg_cost = position_cost / position_qty if position_qty > 0 else 0
-                            
-                            # Calculate P&L for this close
-                            pl = sell_qty * (trade['price'] - avg_cost)
-                            
-                            # Record closed position
-                            if entry_time and trade['timestamp']:
-                                from dateutil import parser
-                                entry_dt = parser.parse(entry_time)
-                                exit_dt = parser.parse(trade['timestamp'])
-                                hold_time_hours = (exit_dt - entry_dt).total_seconds() / 3600
-                            else:
-                                hold_time_hours = 0
-                            
-                            closed_positions.append({
-                                'symbol': symbol,
-                                'pl': pl,
-                                'entry_price': avg_cost,
-                                'exit_price': trade['price'],
-                                'qty': sell_qty,
-                                'hold_time_hours': hold_time_hours
-                            })
-                            
-                            # Update remaining position
-                            position_qty -= sell_qty
-                            if position_qty > 0:
-                                position_cost = position_qty * avg_cost
-                            else:
-                                position_cost = 0
-                                entry_time = None
+                # Calculate hold time
+                if trade.created_at and trade.closed_at:
+                    hold_time_hours = (trade.closed_at - trade.created_at).total_seconds() / 3600
+                    total_hold_time += hold_time_hours
             
-            if not closed_positions:
+            if not winning_trades and not losing_trades:
                 return Response({
-                    'totalTrades': 0,
+                    'totalTrades': closed_trades.count(),
                     'winningTrades': 0,
                     'losingTrades': 0,
                     'winRate': 0,
@@ -1339,26 +1249,23 @@ class PerformanceAnalyticsView(APIView):
                 }, status=status.HTTP_200_OK)
             
             # Calculate performance metrics
-            winning_trades = [p for p in closed_positions if p['pl'] > 0]
-            losing_trades = [p for p in closed_positions if p['pl'] < 0]
-            
-            total_profit = sum(p['pl'] for p in winning_trades)
-            total_loss = abs(sum(p['pl'] for p in losing_trades))
+            total_profit = sum(winning_trades) if winning_trades else 0
+            total_loss = sum(losing_trades) if losing_trades else 0
             net_pnl = total_profit - total_loss
             
-            win_rate = (len(winning_trades) / len(closed_positions)) * 100 if closed_positions else 0
+            total_trades = len(winning_trades) + len(losing_trades)
+            win_rate = (len(winning_trades) / total_trades) * 100 if total_trades > 0 else 0
             
             avg_win = total_profit / len(winning_trades) if winning_trades else 0
             avg_loss = total_loss / len(losing_trades) if losing_trades else 0
             
             profit_factor = total_profit / total_loss if total_loss > 0 else (999 if total_profit > 0 else 0)
             
-            largest_win = max((p['pl'] for p in winning_trades), default=0)
-            largest_loss = abs(min((p['pl'] for p in losing_trades), default=0))
+            largest_win = max(winning_trades) if winning_trades else 0
+            largest_loss = max(losing_trades) if losing_trades else 0
             
             # Calculate average hold time
-            total_hold_time = sum(p['hold_time_hours'] for p in closed_positions)
-            avg_hold_hours = total_hold_time / len(closed_positions) if closed_positions else 0
+            avg_hold_hours = total_hold_time / total_trades if total_trades > 0 else 0
             
             if avg_hold_hours < 1:
                 avg_hold_time_str = f"{int(avg_hold_hours * 60)}m"
@@ -1367,14 +1274,16 @@ class PerformanceAnalyticsView(APIView):
             else:
                 avg_hold_time_str = f"{(avg_hold_hours / 24):.1f}d"
             
-            # Calculate ROI based on initial capital (use current equity as baseline)
+            # Calculate ROI based on initial capital
+            from .alpaca_account_service import AlpacaAccountService
+            alpaca_service = AlpacaAccountService()
             account_info = alpaca_service.get_account_info()
             current_equity = float(account_info.get('equity', 100000)) if account_info else 100000
-            initial_capital = current_equity - net_pnl  # Approximate initial capital
+            initial_capital = current_equity - net_pnl
             roi = (net_pnl / initial_capital) * 100 if initial_capital > 0 else 0
             
             return Response({
-                'totalTrades': len(closed_positions),
+                'totalTrades': total_trades,
                 'winningTrades': len(winning_trades),
                 'losingTrades': len(losing_trades),
                 'winRate': round(win_rate, 2),
