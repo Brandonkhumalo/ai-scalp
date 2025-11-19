@@ -347,7 +347,7 @@ class AITradingEngine:
             ml_prediction = ml_model.predict(ml_features)
             
             # Add ML signal if model is available and confident (75%+ for high-quality trades)
-            if ml_prediction['model_available'] and ml_prediction['confidence'] > 0.75:
+            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.75:
                 if ml_prediction['prediction'] == 1:  # Profitable trade predicted
                     # ML suggests this is a good trade opportunity with high confidence
                     signal_strength += int(ml_prediction['confidence'] * 30)  # Up to 30 points for high confidence
@@ -428,7 +428,7 @@ class AITradingEngine:
             
             elif rsi > 70:
                 # Check if higher timeframe allows this SELL
-                if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'uptrend':
+                if higher_tf_trend['confidence'] >= 0.6 and higher_tf_trend['trend'] == 'uptrend':
                     # CRITICAL: Block execution completely - return no signal to prevent selling in strong uptrend
                     rsi_override_blocked_by_trend = True
                     logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} > 70 but 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%}) - NOT selling into uptrend!')
@@ -461,7 +461,7 @@ class AITradingEngine:
             # Apply regular trend filter blocks (for non-RSI-override trades)
             if not use_training_data and not rsi_override_applied:
                 # Block trades if higher timeframe shows strong opposite trend
-                if higher_tf_trend['confidence'] >= 0.7:
+                if higher_tf_trend['confidence'] >= 0.6:
                     if higher_tf_trend['trend'] == 'downtrend' and buy_signals > sell_signals:
                         logger.warning(f'⛔ Trend Filter: Blocking BUY signal - 15M timeframe shows strong downtrend')
                         trend_filter_blocked = True
