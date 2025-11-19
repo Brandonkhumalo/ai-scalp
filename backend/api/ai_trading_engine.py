@@ -367,43 +367,64 @@ class AITradingEngine:
             if volume_surge:
                 signal_strength += 20
             
-            # *** RSI OVERRIDE: Extreme RSI values override MACD disagreement ***
-            # RSI < 30 = extremely oversold (rare, high-probability reversal zone)
-            # RSI > 70 = extremely overbought (rare, high-probability reversal zone)
-            # These zones are so strong they override conflicting MACD signals
-            rsi_override_applied = False
-            if rsi < 30:
-                # Force BUY signal even if MACD disagrees
-                buy_signals = max(buy_signals, 2)  # Ensure minimum 2 signals for execution
-                sell_signals = 0  # Clear conflicting sell signals
-                signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme oversold
-                rsi_override_applied = True
-                logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} < 30 (EXTREMELY OVERSOLD) → Forcing BUY signal')
-            elif rsi > 70:
-                # Force SELL signal even if MACD disagrees
-                sell_signals = max(sell_signals, 2)  # Ensure minimum 2 signals for execution
-                buy_signals = 0  # Clear conflicting buy signals
-                signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme overbought
-                rsi_override_applied = True
-                logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} > 70 (EXTREMELY OVERBOUGHT) → Forcing SELL signal')
-            
-            # *** TREND DETECTION FILTER ***
-            # Check higher timeframe trend before allowing trades
+            # *** TREND DETECTION FILTER - CHECK FIRST (MOVED BEFORE RSI OVERRIDE) ***
+            # Check higher timeframe trend before allowing RSI override
+            # This prevents synchronized buying of falling tech stocks during market selloffs
             trend_filter_blocked = False
+            higher_tf_trend = {'trend': 'neutral', 'confidence': 0}
+            
             if not use_training_data:  # Only apply in live trading, not during ML training
                 higher_tf_trend = self.check_higher_timeframe_trend(symbol)
                 ema_trend_1min = self.calculate_ema_trend(prices)
                 supertrend_1min, _ = self.calculate_supertrend(bars)
                 
                 logger.info(f'{symbol} Trend Check - 15M: {higher_tf_trend["trend"]} (conf: {higher_tf_trend["confidence"]:.1%}), 1M EMA: {ema_trend_1min}, 1M SuperTrend: {supertrend_1min}')
-                
+            else:
+                # For training data, store trend values for ML learning
+                ema_trend_1min = 'neutral'
+                supertrend_1min = 'neutral'
+            
+            # *** RSI OVERRIDE: Extreme RSI values override MACD disagreement ***
+            # BUT ONLY IF NOT BLOCKED BY HIGHER TIMEFRAME TREND (FIXED!)
+            # RSI < 30 = extremely oversold (rare, high-probability reversal zone)
+            # RSI > 70 = extremely overbought (rare, high-probability reversal zone)
+            # NEW: Check higher timeframe trend FIRST to prevent buying falling knives
+            rsi_override_applied = False
+            rsi_override_blocked_by_trend = False
+            
+            if rsi < 30:
+                # Check if higher timeframe allows this BUY
+                if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'downtrend':
+                    rsi_override_blocked_by_trend = True
+                    logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} < 30 but 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%}) - NOT buying falling knife!')
+                else:
+                    # Safe to apply RSI override
+                    buy_signals = max(buy_signals, 2)  # Ensure minimum 2 signals for execution
+                    sell_signals = 0  # Clear conflicting sell signals
+                    signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme oversold
+                    rsi_override_applied = True
+                    logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} < 30 (EXTREMELY OVERSOLD) + No strong downtrend → Forcing BUY signal')
+            
+            elif rsi > 70:
+                # Check if higher timeframe allows this SELL
+                if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'uptrend':
+                    rsi_override_blocked_by_trend = True
+                    logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} > 70 but 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%}) - NOT selling into uptrend!')
+                else:
+                    # Safe to apply RSI override
+                    sell_signals = max(sell_signals, 2)  # Ensure minimum 2 signals for execution
+                    buy_signals = 0  # Clear conflicting buy signals
+                    signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme overbought
+                    rsi_override_applied = True
+                    logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} > 70 (EXTREMELY OVERBOUGHT) + No strong uptrend → Forcing SELL signal')
+            
+            # Apply regular trend filter blocks (for non-RSI-override trades)
+            if not use_training_data and not rsi_override_applied:
                 # Block trades if higher timeframe shows strong opposite trend
-                # This prevents buying in a downtrend or selling in an uptrend
                 if higher_tf_trend['confidence'] >= 0.7:
                     if higher_tf_trend['trend'] == 'downtrend' and buy_signals > sell_signals:
                         logger.warning(f'⛔ Trend Filter: Blocking BUY signal - 15M timeframe shows strong downtrend')
                         trend_filter_blocked = True
-                        # Return no signal to hard-block the trade
                         return {
                             'signal': None,
                             'confidence': 0,
@@ -425,7 +446,6 @@ class AITradingEngine:
                     elif higher_tf_trend['trend'] == 'uptrend' and sell_signals > buy_signals:
                         logger.warning(f'⛔ Trend Filter: Blocking SELL signal - 15M timeframe shows strong uptrend')
                         trend_filter_blocked = True
-                        # Return no signal to hard-block the trade
                         return {
                             'signal': None,
                             'confidence': 0,
@@ -453,11 +473,6 @@ class AITradingEngine:
                     elif higher_tf_trend['trend'] == 'downtrend' and sell_signals > buy_signals:
                         signal_strength += int(higher_tf_trend['confidence'] * 20)
                         logger.info(f'✅ Trend Filter: SELL aligned with 15M downtrend - boosting confidence')
-            else:
-                # For training data, store trend values for ML learning
-                higher_tf_trend = {'trend': 'neutral', 'confidence': 0}
-                ema_trend_1min = 'neutral'
-                supertrend_1min = 'neutral'
             
             # Determine final signal based on majority vote
             signal = None

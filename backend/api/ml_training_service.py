@@ -23,7 +23,7 @@ class MLTradingModel:
         self.min_trades_for_training = 5  # Start learning with 5 trades, improve as more data comes in
         self.retrain_interval_hours = 24
         self.expected_features = 38  # Updated to 38 features (30 + 8 advanced loss pattern features)
-        self.model_version = '4.0'  # Version 4.0 with 38 features (trend detection, drawdown, volatility spike, loss pattern learning)
+        self.model_version = '4.1'  # Version 4.1 - FIXED DATA LEAKAGE: price_change now uses entry-time momentum only
         
         # Load training cutoff date from Django settings
         from django.conf import settings
@@ -271,7 +271,9 @@ class MLTradingModel:
                     'bb_lower': bb_lower,
                     'bb_middle': bb_middle,
                     'volume': volume,
-                    'price_change': ((trade.exit_price or trade.entry_price) - trade.entry_price) / trade.entry_price if trade.entry_price else 0,
+                    # FIX: Use momentum from signal_data (entry-time info) instead of trade outcome
+                    # OLD (DATA LEAKAGE): ((trade.exit_price or trade.entry_price) - trade.entry_price) / trade.entry_price
+                    'price_change': signal_data.get('momentum', 0),  # Entry-time momentum only
                     'volatility': volatility,
                     'side': trade.side,
                     'profit_loss': profit_loss,
