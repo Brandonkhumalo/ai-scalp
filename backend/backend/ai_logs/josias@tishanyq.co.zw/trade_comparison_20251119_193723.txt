@@ -1,0 +1,213 @@
+================================================================================
+TRADE COMPARISON - PAST 5 DAYS
+================================================================================
+
+Report Generated: 2025-11-19 19:37:23
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-19
+--------------------------------------------------------------------------------
+Total Trades: 169
+Closed Trades: 169
+Win Rate: 58.0%
+Total P&L: $2062.84
+Avg Profit per Trade: $12.21
+
+Trade Details:
+  1. GOOGL    sell Entry: $293.47 -> Exit: $293.12 | P&L: +$21.60
+  2. NFLX     buy  Entry: $109.62 -> Exit: $109.64 | P&L: +$3.28
+  3. NFLX     BUY  Entry: $109.61 -> Exit: $109.62 | P&L: +$0.00
+  4. NFLX     BUY  Entry: $109.60 -> Exit: $109.62 | P&L: +$0.00
+  5. NFLX     buy  Entry: $109.54 -> Exit: $109.59 | P&L: +$8.66
+  6. NFLX     BUY  Entry: $109.56 -> Exit: $109.58 | P&L: +$0.00
+  7. NFLX     sell Entry: $109.55 -> Exit: $109.51 | P&L: +$8.82
+  8. AMZN     buy  Entry: $221.39 -> Exit: $221.44 | P&L: +$4.40
+  9. NVDA     buy  Entry: $185.26 -> Exit: $185.29 | P&L: +$4.22
+  10. NVDA     BUY  Entry: $185.22 -> Exit: $185.29 | P&L: +$0.00
+  11. AMZN     BUY  Entry: $221.24 -> Exit: $221.42 | P&L: +$0.00
+  12. NVDA     buy  Entry: $185.14 -> Exit: $185.29 | P&L: +$19.03
+  13. INTC     buy  Entry: $34.81 -> Exit: $34.82 | P&L: +$7.46
+  14. INTC     BUY  Entry: $34.78 -> Exit: $34.76 | P&L: +$0.00
+  15. INTC     buy  Entry: $34.74 -> Exit: $34.77 | P&L: +$29.96
+  16. INTC     BUY  Entry: $34.76 -> Exit: $34.76 | P&L: +$0.00
+  17. AMZN     buy  Entry: $221.40 -> Exit: $221.50 | P&L: +$2.94
+  18. AMZN     BUY  Entry: $221.38 -> Exit: $221.49 | P&L: +$0.00
+  19. META     buy  Entry: $585.99 -> Exit: $586.17 | P&L: +$5.58
+  20. INTC     buy  Entry: $34.71 -> Exit: $34.74 | P&L: +$16.78
+  21. AMZN     buy  Entry: $221.31 -> Exit: $221.37 | P&L: +$4.72
+  22. AMZN     BUY  Entry: $221.34 -> Exit: $221.37 | P&L: +$0.00
+  23. AMZN     sell Entry: $221.27 -> Exit: $221.22 | P&L: +$5.82
+  24. NVDA     BUY  Entry: $184.99 -> Exit: $185.33 | P&L: +$0.00
+  25. META     BUY  Entry: $586.12 -> Exit: $586.06 | P&L: +$0.00
+  26. META     sell Entry: $586.35 -> Exit: $586.02 | P&L: +$0.66
+  27. GOOGL    sell Entry: $294.02 -> Exit: $293.67 | P&L: +$12.60
+  28. INTC     BUY  Entry: $34.70 -> Exit: $34.73 | P&L: +$0.00
+  29. META     sell Entry: $586.35 -> Exit: $585.80 | P&L: +$22.62
+  30. GOOGL    sell Entry: $294.02 -> Exit: $293.86 | P&L: +$12.71
+  31. AMZN     sell Entry: $221.89 -> Exit: $221.52 | P&L: +$33.76
+  32. META     SELL Entry: $586.19 -> Exit: $586.57 | P&L: +$0.00
+  33. NVDA     sell Entry: $185.45 -> Exit: $185.34 | P&L: +$11.68
+  34. NFLX     sell Entry: $109.64 -> Exit: $109.61 | P&L: +$6.63
+  35. META     sell Entry: $586.57 -> Exit: $586.22 | P&L: +$14.35
+  36. INTC     sell Entry: $34.75 -> Exit: $34.72 | P&L: +$24.43
+  37. GOOGL    sell Entry: $294.26 -> Exit: $294.10 | P&L: +$13.12
+  38. NVDA     SELL Entry: $185.50 -> Exit: $185.54 | P&L: +$0.00
+  39. TSLA     buy  Entry: $402.98 -> Exit: $403.15 | P&L: +$10.18
+  40. META     buy  Entry: $586.55 -> Exit: $586.61 | P&L: +$2.40
+  41. NVDA     buy  Entry: $185.44 -> Exit: $185.59 | P&L: +$12.17
+  42. INTC     buy  Entry: $34.74 -> Exit: $34.76 | P&L: +$13.96
+  43. META     buy  Entry: $586.55 -> Exit: $586.66 | P&L: +$4.45
+  44. GOOGL    buy  Entry: $293.94 -> Exit: $294.28 | P&L: +$28.35
+  45. INTC     buy  Entry: $34.74 -> Exit: $34.76 | P&L: +$13.89
+  46. GOOGL    buy  Entry: $293.94 -> Exit: $294.28 | P&L: +$28.35
+  47. AMD      buy  Entry: $222.42 -> Exit: $222.44 | P&L: +$0.99
+  48. AAPL     buy  Entry: $270.76 -> Exit: $270.86 | P&L: +$8.56
+  49. NFLX     SELL Entry: $109.64 -> Exit: $109.62 | P&L: +$0.00
+  50. TSLA     BUY  Entry: $402.69 -> Exit: $403.01 | P&L: +$0.00
+  51. META     BUY  Entry: $586.12 -> Exit: $586.57 | P&L: +$0.00
+  52. NVDA     BUY  Entry: $185.38 -> Exit: $185.54 | P&L: +$0.00
+  53. AMD      BUY  Entry: $222.36 -> Exit: $222.38 | P&L: +$0.00
+  54. NVDA     buy  Entry: $185.27 -> Exit: $185.40 | P&L: +$13.00
+  55. TSLA     buy  Entry: $402.97 -> Exit: $403.10 | P&L: +$7.80
+  56. NVDA     buy  Entry: $185.27 -> Exit: $185.40 | P&L: +$16.90
+  57. NFLX     buy  Entry: $109.47 -> Exit: $109.63 | P&L: +$34.52
+  58. META     buy  Entry: $585.76 -> Exit: $585.86 | P&L: +$4.00
+  59. AMZN     buy  Entry: $221.40 -> Exit: $221.55 | P&L: +$16.35
+  60. AMD      buy  Entry: $222.35 -> Exit: $222.46 | P&L: +$11.99
+  61. NFLX     BUY  Entry: $109.40 -> Exit: $109.62 | P&L: +$0.00
+  62. INTC     BUY  Entry: $34.70 -> Exit: $34.75 | P&L: +$0.00
+  63. AMZN     BUY  Entry: $221.38 -> Exit: $221.62 | P&L: +$0.00
+  64. AMD      BUY  Entry: $222.26 -> Exit: $222.44 | P&L: +$0.00
+  65. NFLX     buy  Entry: $109.21 -> Exit: $109.40 | P&L: +$41.48
+  66. INTC     buy  Entry: $34.65 -> Exit: $34.71 | P&L: +$39.47
+  67. AMZN     buy  Entry: $221.04 -> Exit: $221.26 | P&L: +$24.41
+  68. AMD      buy  Entry: $221.95 -> Exit: $222.36 | P&L: +$44.03
+  69. NFLX     BUY  Entry: $109.19 -> Exit: $109.42 | P&L: +$0.00
+  70. AMD      BUY  Entry: $221.71 -> Exit: $222.20 | P&L: +$0.00
+  71. NFLX     buy  Entry: $109.21 -> Exit: $109.22 | P&L: +$2.21
+  72. AMD      buy  Entry: $222.18 -> Exit: $222.37 | P&L: +$20.71
+  73. AAPL     BUY  Entry: $270.50 -> Exit: $270.85 | P&L: +$0.00
+  74. AMZN     BUY  Entry: $220.82 -> Exit: $221.28 | P&L: +$0.00
+  75. INTC     BUY  Entry: $34.66 -> Exit: $34.70 | P&L: +$0.00
+  76. AMD      BUY  Entry: $222.34 -> Exit: $222.34 | P&L: +$0.00
+  77. NVDA     BUY  Entry: $185.59 -> Exit: $185.41 | P&L: +$0.00
+  78. META     BUY  Entry: $585.70 -> Exit: $585.97 | P&L: +$0.00
+  79. NFLX     BUY  Entry: $109.19 -> Exit: $109.20 | P&L: +$0.00
+  80. TSLA     BUY  Entry: $402.39 -> Exit: $402.96 | P&L: +$0.00
+  81. TSLA     buy  Entry: $400.53 -> Exit: $402.35 | P&L: +$43.68
+  82. NVDA     buy  Entry: $184.99 -> Exit: $185.27 | P&L: +$36.99
+  83. NFLX     buy  Entry: $109.17 -> Exit: $109.20 | P&L: +$8.67
+  84. MSFT     buy  Entry: $486.54 -> Exit: $486.86 | P&L: +$15.92
+  85. META     buy  Entry: $585.10 -> Exit: $585.19 | P&L: +$3.49
+  86. INTC     buy  Entry: $34.69 -> Exit: $34.72 | P&L: +$17.45
+  87. AMZN     buy  Entry: $221.04 -> Exit: $221.05 | P&L: +$0.60
+  88. AMD      buy  Entry: $222.07 -> Exit: $222.26 | P&L: +$20.16
+  89. AAPL     buy  Entry: $270.58 -> Exit: $270.71 | P&L: +$11.66
+  90. NFLX     BUY  Entry: $109.12 -> Exit: $109.20 | P&L: +$0.00
+  91. META     BUY  Entry: $585.28 -> Exit: $585.13 | P&L: +$0.00
+  92. AMD      BUY  Entry: $221.59 -> Exit: $222.19 | P&L: +$0.00
+  93. AAPL     BUY  Entry: $270.43 -> Exit: $270.72 | P&L: +$0.00
+  94. INTC     BUY  Entry: $34.66 -> Exit: $34.71 | P&L: +$0.00
+  95. NVDA     BUY  Entry: $184.94 -> Exit: $185.28 | P&L: +$0.00
+  96. TSLA     BUY  Entry: $400.53 -> Exit: $402.42 | P&L: +$0.00
+  97. TSLA     buy  Entry: $400.39 -> Exit: $400.60 | P&L: +$7.74
+  98. NVDA     buy  Entry: $184.30 -> Exit: $184.69 | P&L: +$0.39
+  99. NFLX     buy  Entry: $109.02 -> Exit: $109.12 | P&L: +$23.38
+  100. META     buy  Entry: $584.14 -> Exit: $584.71 | P&L: +$23.37
+  101. INTC     buy  Entry: $34.57 -> Exit: $34.62 | P&L: +$32.08
+  102. GOOGL    buy  Entry: $293.18 -> Exit: $293.61 | P&L: +$21.07
+  103. AMZN     buy  Entry: $220.91 -> Exit: $220.92 | P&L: +$1.09
+  104. AMD      buy  Entry: $221.21 -> Exit: $221.35 | P&L: +$15.26
+  105. AAPL     buy  Entry: $270.14 -> Exit: $270.40 | P&L: +$20.80
+  106. AAPL     BUY  Entry: $270.25 -> Exit: $270.38 | P&L: +$0.00
+  107. AMD      BUY  Entry: $221.18 -> Exit: $221.24 | P&L: +$0.00
+  108. NFLX     BUY  Entry: $109.02 -> Exit: $109.10 | P&L: +$0.00
+  109. AMZN     BUY  Entry: $220.95 -> Exit: $220.91 | P&L: +$0.00
+  110. META     BUY  Entry: $583.60 -> Exit: $584.66 | P&L: +$0.00
+  111. INTC     BUY  Entry: $34.56 -> Exit: $34.61 | P&L: +$0.00
+  112. TSLA     BUY  Entry: $400.33 -> Exit: $400.65 | P&L: +$0.00
+  113. GOOGL    BUY  Entry: $293.03 -> Exit: $293.56 | P&L: +$0.00
+  114. NVDA     BUY  Entry: $184.26 -> Exit: $184.65 | P&L: +$0.00
+  115. TSLA     buy  Entry: $400.27 -> Exit: $400.58 | P&L: +$18.04
+  116. NVDA     buy  Entry: $184.42 -> Exit: $184.44 | P&L: +$2.67
+  117. NFLX     buy  Entry: $108.80 -> Exit: $108.87 | P&L: +$24.84
+  118. META     buy  Entry: $583.15 -> Exit: $583.65 | P&L: +$20.50
+  119. INTC     buy  Entry: $34.58 -> Exit: $34.59 | P&L: +$6.98
+  120. GOOGL    buy  Entry: $293.05 -> Exit: $293.08 | P&L: +$2.88
+  121. AMZN     buy  Entry: $220.77 -> Exit: $220.89 | P&L: +$9.52
+  122. AMD      buy  Entry: $221.01 -> Exit: $221.27 | P&L: +$28.34
+  123. AAPL     buy  Entry: $270.08 -> Exit: $270.23 | P&L: +$13.01
+  124. GOOGL    BUY  Entry: $292.88 -> Exit: $293.02 | P&L: +$0.00
+  125. META     BUY  Entry: $583.32 -> Exit: $583.66 | P&L: +$0.00
+  126. TSLA     BUY  Entry: $400.48 -> Exit: $400.41 | P&L: +$0.00
+  127. AAPL     BUY  Entry: $270.27 -> Exit: $270.21 | P&L: +$0.00
+  128. AMD      BUY  Entry: $221.01 -> Exit: $221.12 | P&L: +$0.00
+  129. INTC     BUY  Entry: $34.58 -> Exit: $34.59 | P&L: +$0.00
+  130. NVDA     BUY  Entry: $184.39 -> Exit: $184.40 | P&L: +$0.00
+  131. NFLX     BUY  Entry: $108.69 -> Exit: $108.85 | P&L: +$0.00
+  132. AMZN     BUY  Entry: $220.77 -> Exit: $220.82 | P&L: +$0.00
+  133. AAPL     BUY  Entry: $270.50 -> Exit: $270.50 | P&L: +$0.00
+  134. AAPL     buy  Entry: $270.49 -> Exit: $270.50 | P&L: +$0.89
+  135. AAPL     BUY  Entry: $270.41 -> Exit: $270.49 | P&L: +$0.00
+  136. AAPL     sell Entry: $270.99 -> Exit: $270.50 | P&L: +$61.17
+  137. AMD      BUY  Entry: $221.90 -> Exit: $221.90 | P&L: +$0.00
+  138. AAPL     SELL Entry: $270.95 -> Exit: $270.87 | P&L: +$0.00
+  139. AAPL     buy  Entry: $270.34 -> Exit: $270.87 | P&L: +$47.06
+  140. AMZN     BUY  Entry: $220.28 -> Exit: $220.28 | P&L: +$0.00
+  141. AAPL     BUY  Entry: $270.20 -> Exit: $270.87 | P&L: +$0.00
+  142. GOOGL    BUY  Entry: $294.57 -> Exit: $294.57 | P&L: +$0.00
+  143. GOOGL    buy  Entry: $294.45 -> Exit: $294.80 | P&L: +$17.15
+  144. GOOGL    buy  Entry: $293.89 -> Exit: $294.37 | P&L: +$39.76
+  145. MSFT     BUY  Entry: $487.48 -> Exit: $487.48 | P&L: +$0.00
+  146. MSFT     buy  Entry: $487.79 -> Exit: $487.88 | P&L: +$3.96
+  147. GOOGL    buy  Entry: $293.69 -> Exit: $294.15 | P&L: +$37.51
+  148. TSLA     BUY  Entry: $403.12 -> Exit: $403.12 | P&L: +$0.00
+  149. INTC     BUY  Entry: $34.86 -> Exit: $34.86 | P&L: +$0.00
+  150. META     BUY  Entry: $587.47 -> Exit: $587.47 | P&L: +$0.00
+  151. MSFT     buy  Entry: $488.80 -> Exit: $489.13 | P&L: +$16.62
+  152. GOOGL    buy  Entry: $295.72 -> Exit: $295.94 | P&L: +$13.40
+  153. META     buy  Entry: $586.95 -> Exit: $587.77 | P&L: +$33.62
+  154. GOOGL    buy  Entry: $295.72 -> Exit: $295.88 | P&L: +$9.80
+  155. AMZN     buy  Entry: $222.77 -> Exit: $222.86 | P&L: +$9.90
+  156. INTC     sell Entry: $34.86 -> Exit: $34.86 | P&L: +$5.58
+  157. TSLA     buy  Entry: $405.03 -> Exit: $405.86 | P&L: +$49.26
+  158. TSLA     buy  Entry: $405.03 -> Exit: $405.82 | P&L: +$46.89
+  159. TSLA     buy  Entry: $405.03 -> Exit: $405.77 | P&L: +$44.16
+  160. INTC     buy  Entry: $34.84 -> Exit: $34.86 | P&L: +$13.95
+  161. INTC     buy  Entry: $34.84 -> Exit: $34.87 | P&L: +$16.74
+  162. NFLX     BUY  Entry: $109.92 -> Exit: $109.92 | P&L: +$0.00
+  163. NVDA     BUY  Entry: $185.46 -> Exit: $185.46 | P&L: +$0.00
+  164. NVDA     sell Entry: $185.88 -> Exit: $185.80 | P&L: +$10.48
+  165. TSLA     sell Entry: $409.21 -> Exit: $408.91 | P&L: +$17.57
+  166. META     buy  Entry: $591.77 -> Exit: $592.54 | P&L: +$30.76
+  167. AMZN     buy  Entry: $219.38 -> Exit: $219.65 | P&L: +$30.37
+  168. INTC     sell Entry: $34.93 -> Exit: $34.75 | P&L: +$189.40
+  169. NVDA     buy  Entry: $184.45 -> Exit: $185.87 | P&L: +$190.26
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-18
+--------------------------------------------------------------------------------
+Total Trades: 2
+Closed Trades: 2
+Win Rate: 50.0%
+Total P&L: $-316.58
+Avg Profit per Trade: $-158.29
+
+Trade Details:
+  1. NVDA     BUY  Entry: $182.32 -> Exit: $185.80 | P&L: +$372.36
+  2. AMD      BUY  Entry: $232.11 -> Exit: $226.93 | P&L: $-688.94
+
+================================================================================
+5-DAY SUMMARY
+================================================================================
+Total Trades: 171
+Profitable Trades: 99
+Losing Trades: 72
+Overall Win Rate: 57.9%
+Total Profit/Loss: $1746.26
+Average per Trade: $10.21
+
+PERFORMANCE TREND:
+✓ IMPROVING - Recent performance is better than earlier days
+
+================================================================================

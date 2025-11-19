@@ -65,7 +65,8 @@ class Command(BaseCommand):
                         if ml_model.should_retrain(last_training, closed_trades_count):
                             self.stdout.write(f'🧠 Retraining ML model for {user.email}...')
                             # Convert to list to avoid "Cannot filter after slice" error
-                            user_trades = list(Trade.objects.filter(user=user, status='closed').order_by('-created_at')[:100])
+                            # FIXED: Use ALL closed trades (not just newest 100) to include losing trades
+                            user_trades = list(Trade.objects.filter(user=user, status='closed').order_by('-created_at'))
                             
                             if user_trades:
                                 retrain_result = ml_model.train(user_trades)

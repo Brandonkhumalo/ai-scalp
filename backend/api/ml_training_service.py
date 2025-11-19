@@ -308,8 +308,10 @@ class MLTradingModel:
         """Train the ML model on historical trades"""
         logger.info(f'Starting ML model training with {len(trades)} trades')
         
-        # Filter trades by cutoff date to exclude corrupted historical data
-        trades = self._filter_trades_by_cutoff(trades)
+        # TEMPORARILY DISABLED: Cutoff filter removed to include losing trades for proper ML training
+        # The 11 losing trades were excluded by the Nov 11 cutoff, causing 100% profitable training data
+        # trades = self._filter_trades_by_cutoff(trades)
+        logger.info('Using ALL closed trades (cutoff filter disabled to include losing trades)')
         
         X, y = self.prepare_training_data(trades)
         

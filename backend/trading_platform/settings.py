@@ -275,7 +275,7 @@ else:
 # Format: ISO-8601 (YYYY-MM-DD) - parsed with timezone awareness
 from datetime import datetime, timezone
 
-ML_TRAINING_CUTOFF_DATE_STR = os.getenv('ML_TRAINING_CUTOFF_DATE', '2025-11-11')
+ML_TRAINING_CUTOFF_DATE_STR = os.getenv('ML_TRAINING_CUTOFF_DATE', '2000-01-01')  # Changed from 2025-11-11 to include all trades
 try:
     ML_TRAINING_CUTOFF_DATE = datetime.fromisoformat(ML_TRAINING_CUTOFF_DATE_STR).replace(tzinfo=timezone.utc)
 except ValueError:
