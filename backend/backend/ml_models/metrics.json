@@ -1,11 +1,11 @@
 {
   "success": true,
-  "timestamp": "2025-11-19T16:47:04.783026",
-  "trades_count": 7,
-  "training_samples": 5,
-  "test_samples": 2,
+  "timestamp": "2025-11-19T17:05:23.334887",
+  "trades_count": 19,
+  "training_samples": 15,
+  "test_samples": 4,
   "train_accuracy": 1.0,
-  "test_accuracy": 1.0,
+  "test_accuracy": 0.75,
   "feature_importances": {
     "RSI": 0.0,
     "MACD": 0.0,
@@ -46,5 +46,5 @@
     "Similar_Past_Losses": 0.0,
     "Loss_Pattern_Score": 0.0
   },
-  "profitable_ratio": 1.0
+  "profitable_ratio": 0.9473684210526315
 }
