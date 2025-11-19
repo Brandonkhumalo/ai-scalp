@@ -548,10 +548,10 @@ class CloseProfitableTradesView(APIView):
                     'message': 'No open Alpaca positions found'
                 }, status=status.HTTP_200_OK)
             
-            # Filter positions with >=1% profit (scalping target)
+            # Filter profitable positions (any profit > 0% - works for both long/short)
             profitable_positions = [
                 pos for pos in positions 
-                if float(pos.get('unrealized_plpc', 0)) >= 0.01  # 1% profit threshold
+                if float(pos.get('unrealized_plpc', 0)) > 0  # Use percentage to handle long/short correctly
             ]
             
             if not profitable_positions:
@@ -938,13 +938,90 @@ class ToggleAutonomousAgentView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
+        from .alpaca_account_service import AlpacaAccountService
+        
         user = request.user
         enabled = request.data.get('enabled', False)
+        
+        logger = logging.getLogger(__name__)
+        
+        # When disabling AI (Stop AI pressed), close ALL open Alpaca positions
+        if not enabled:
+            try:
+                alpaca_service = AlpacaAccountService()
+                positions = alpaca_service.get_positions() or []
+                
+                if positions:
+                    # Wrap entire close operation in atomic transaction
+                    with db_transaction.atomic():
+                        closed_count = 0
+                        total_realized_profit = Decimal('0')
+                        
+                        for pos in positions:
+                            symbol = pos.get('symbol')
+                            qty = abs(float(pos.get('qty', 0)))
+                            side = pos.get('side')
+                            unrealized_pl = float(pos.get('unrealized_pl', 0))
+                            avg_entry_price = float(pos.get('avg_entry_price', 0))
+                            current_price = float(pos.get('current_price', 0))
+                            
+                            try:
+                                # Cancel any pending orders for this symbol
+                                open_orders = alpaca_service.get_orders(status='open', limit=500)
+                                if open_orders:
+                                    symbol_orders = [o for o in open_orders if o.get('symbol') == symbol]
+                                    for order in symbol_orders:
+                                        alpaca_service.cancel_order(order.get('id'))
+                                
+                                # Close position
+                                close_side = 'sell' if side == 'long' else 'buy'
+                                order_result = alpaca_service.place_order(
+                                    symbol=symbol,
+                                    qty=qty,
+                                    side=close_side,
+                                    order_type='market'
+                                )
+                                
+                                if order_result and order_result.get('id'):
+                                    closed_count += 1
+                                    total_realized_profit += Decimal(str(unrealized_pl))
+                                    
+                                    # Record closed trade in database
+                                    Trade.objects.create(
+                                        user=user,
+                                        symbol=symbol,
+                                        instrument_type='stock',
+                                        broker='alpaca_sim',
+                                        side='buy' if side == 'long' else 'sell',
+                                        quantity=Decimal(str(qty)),
+                                        entry_price=Decimal(str(avg_entry_price)),
+                                        exit_price=Decimal(str(current_price)),
+                                        profit_loss=Decimal(str(unrealized_pl)),
+                                        status='closed',
+                                        closed_at=timezone.now(),
+                                        broker_deal_id=order_result.get('id')
+                                    )
+                                    
+                                    Transaction.objects.create(
+                                        user=user,
+                                        type='trade_pnl',
+                                        amount=Decimal(str(unrealized_pl)),
+                                        currency='USD',
+                                        reference=f'Stop AI: {symbol} closed (P&L: ${unrealized_pl:.2f})',
+                                        status='completed'
+                                    )
+                            except Exception as e:
+                                logger.exception(f"Failed to close {symbol} when stopping AI")
+                                # Continue with other positions even if one fails
+                                continue
+                        
+                        logger.info(f"Stopped AI for {user.email}: Closed {closed_count} positions, Total P&L: ${total_realized_profit}")
+            except Exception as e:
+                logger.exception(f"Error closing positions when stopping AI for {user.email}")
         
         user.autonomous_trading_enabled = enabled
         user.save()
         
-        logger = logging.getLogger(__name__)
         status_text = "enabled" if enabled else "disabled"
         logger.info(f"Autonomous trading {status_text} for user {user.email}")
         

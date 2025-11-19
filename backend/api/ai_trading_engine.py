@@ -684,7 +684,7 @@ class AITradingEngine:
         }
     
     def check_scalping_targets(self, user):
-        """Check and auto-close positions at scalping targets (3% profit / 2% stop-loss)"""
+        """Check and auto-close positions at scalping targets (1% profit / 2% stop-loss)"""
         from django.db import transaction as db_transaction
         from django.utils import timezone
         from decimal import Decimal
@@ -704,7 +704,7 @@ class AITradingEngine:
                     return {'action': 'none', 'message': 'No open trades'}
                 
                 # SCALPING PARAMETERS (Adjusted for better position visibility)
-                PROFIT_TARGET = Decimal('0.03')  # 3% profit target per trade
+                PROFIT_TARGET = Decimal('0.01')  # 1% profit target per trade (scalping)
                 STOP_LOSS = Decimal('0.02')  # 2% stop-loss per trade
                 
                 market_service = MarketDataService()
@@ -1060,7 +1060,7 @@ class AITradingEngine:
             # For BUY orders: stop_loss below entry, take_profit above
             # For SELL orders: stop_loss above entry, take_profit below
             stop_loss_pct = 0.02  # 2% stop-loss
-            take_profit_pct = 0.03  # 3% take-profit
+            take_profit_pct = 0.01  # 1% take-profit (scalping)
             
             if analysis['signal'].lower() == 'buy':
                 stop_loss_price = round(current_price * (1 - stop_loss_pct), 2)
