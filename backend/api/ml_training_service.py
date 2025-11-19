@@ -212,15 +212,19 @@ class MLTradingModel:
         for i, trade in enumerate(trades):
             # Only include closed trades with profit/loss calculated
             if trade.status == 'closed' and trade.profit_loss is not None:
-                # Handle both dict (new format) and string (legacy format) ai_signal_type
+                # Handle both dict (new format), None (legacy without signal), and string (legacy format) ai_signal_type
                 signal_data = {}
                 if trade.ai_signal_type:
                     if isinstance(trade.ai_signal_type, dict):
                         signal_data = trade.ai_signal_type
                     elif isinstance(trade.ai_signal_type, str):
-                        # Legacy format - skip or use defaults
-                        logger.info(f'Skipping legacy trade {trade.id} with string ai_signal_type')
-                        continue
+                        # Legacy string format - use defaults
+                        logger.info(f'Using defaults for legacy trade {trade.id} with string ai_signal_type')
+                        signal_data = {}
+                else:
+                    # No signal data saved (very old trades) - use neutral defaults
+                    logger.debug(f'Using defaults for legacy trade {trade.id} without ai_signal_type')
+                    signal_data = {}
                 
                 # Extract volume from signal_data if available
                 volume = signal_data.get('volume', 0)

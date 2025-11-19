@@ -1,0 +1,65 @@
+================================================================================
+TRADE COMPARISON - PAST 5 DAYS
+================================================================================
+
+Report Generated: 2025-11-19 17:49:57
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-19
+--------------------------------------------------------------------------------
+Total Trades: 21
+Closed Trades: 21
+Win Rate: 100.0%
+Total P&L: $827.14
+Avg Profit per Trade: $39.39
+
+Trade Details:
+  1. NVDA     buy  Entry: $184.45 -> Exit: $185.87 | P&L: +$190.26
+  2. INTC     sell Entry: $34.93 -> Exit: $34.75 | P&L: +$189.40
+  3. AMZN     buy  Entry: $219.38 -> Exit: $219.65 | P&L: +$30.37
+  4. META     buy  Entry: $591.77 -> Exit: $592.54 | P&L: +$30.76
+  5. TSLA     sell Entry: $409.21 -> Exit: $408.91 | P&L: +$17.57
+  6. NVDA     sell Entry: $185.88 -> Exit: $185.80 | P&L: +$10.48
+  7. INTC     buy  Entry: $34.84 -> Exit: $34.87 | P&L: +$16.74
+  8. INTC     buy  Entry: $34.84 -> Exit: $34.86 | P&L: +$13.95
+  9. TSLA     buy  Entry: $405.03 -> Exit: $405.77 | P&L: +$44.16
+  10. TSLA     buy  Entry: $405.03 -> Exit: $405.82 | P&L: +$46.89
+  11. TSLA     buy  Entry: $405.03 -> Exit: $405.86 | P&L: +$49.26
+  12. INTC     sell Entry: $34.86 -> Exit: $34.86 | P&L: +$5.58
+  13. AMZN     buy  Entry: $222.77 -> Exit: $222.86 | P&L: +$9.90
+  14. GOOGL    buy  Entry: $295.72 -> Exit: $295.88 | P&L: +$9.80
+  15. META     buy  Entry: $586.95 -> Exit: $587.77 | P&L: +$33.62
+  16. GOOGL    buy  Entry: $295.72 -> Exit: $295.94 | P&L: +$13.40
+  17. MSFT     buy  Entry: $488.80 -> Exit: $489.13 | P&L: +$16.62
+  18. GOOGL    buy  Entry: $293.69 -> Exit: $294.15 | P&L: +$37.51
+  19. MSFT     buy  Entry: $487.79 -> Exit: $487.88 | P&L: +$3.96
+  20. GOOGL    buy  Entry: $293.89 -> Exit: $294.37 | P&L: +$39.76
+  21. GOOGL    buy  Entry: $294.45 -> Exit: $294.80 | P&L: +$17.15
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-18
+--------------------------------------------------------------------------------
+Total Trades: 2
+Closed Trades: 2
+Win Rate: 50.0%
+Total P&L: $-316.58
+Avg Profit per Trade: $-158.29
+
+Trade Details:
+  1. AMD      BUY  Entry: $232.11 -> Exit: $226.93 | P&L: $-688.94
+  2. NVDA     BUY  Entry: $182.32 -> Exit: $185.80 | P&L: +$372.36
+
+================================================================================
+5-DAY SUMMARY
+================================================================================
+Total Trades: 23
+Profitable Trades: 22
+Losing Trades: 1
+Overall Win Rate: 95.7%
+Total Profit/Loss: $510.56
+Average per Trade: $22.20
+
+PERFORMANCE TREND:
+✓ IMPROVING - Recent performance is better than earlier days
+
+================================================================================
