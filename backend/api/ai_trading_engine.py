@@ -395,8 +395,27 @@ class AITradingEngine:
             if rsi < 30:
                 # Check if higher timeframe allows this BUY
                 if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'downtrend':
+                    # CRITICAL: Block execution completely - return no signal to prevent buying falling knife
                     rsi_override_blocked_by_trend = True
                     logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} < 30 but 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%}) - NOT buying falling knife!')
+                    return {
+                        'signal': None,
+                        'confidence': 0,
+                        'momentum': momentum,
+                        'rsi': rsi,
+                        'macd': macd_line,
+                        'macd_signal': signal_line,
+                        'macd_histogram': histogram,
+                        'bb_upper': upper_band,
+                        'bb_middle': middle_band,
+                        'bb_lower': lower_band,
+                        'volume': avg_volume,
+                        'volume_surge': volume_surge,
+                        'volatility': volatility,
+                        'current_price': current_price,
+                        'ml_prediction': ml_prediction,
+                        'trend_filter': 'BLOCKED: RSI override rejected by 15M downtrend'
+                    }
                 else:
                     # Safe to apply RSI override
                     buy_signals = max(buy_signals, 2)  # Ensure minimum 2 signals for execution
@@ -408,8 +427,27 @@ class AITradingEngine:
             elif rsi > 70:
                 # Check if higher timeframe allows this SELL
                 if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'uptrend':
+                    # CRITICAL: Block execution completely - return no signal to prevent selling in strong uptrend
                     rsi_override_blocked_by_trend = True
                     logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} > 70 but 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%}) - NOT selling into uptrend!')
+                    return {
+                        'signal': None,
+                        'confidence': 0,
+                        'momentum': momentum,
+                        'rsi': rsi,
+                        'macd': macd_line,
+                        'macd_signal': signal_line,
+                        'macd_histogram': histogram,
+                        'bb_upper': upper_band,
+                        'bb_middle': middle_band,
+                        'bb_lower': lower_band,
+                        'volume': avg_volume,
+                        'volume_surge': volume_surge,
+                        'volatility': volatility,
+                        'current_price': current_price,
+                        'ml_prediction': ml_prediction,
+                        'trend_filter': 'BLOCKED: RSI override rejected by 15M uptrend'
+                    }
                 else:
                     # Safe to apply RSI override
                     sell_signals = max(sell_signals, 2)  # Ensure minimum 2 signals for execution
@@ -500,6 +538,20 @@ class AITradingEngine:
             elif sell_signals > buy_signals and sell_signals >= 2:
                 signal = 'SELL'
                 confidence = min(max(signal_strength, 0), 95)
+            
+            # *** FINAL GUARD: Block ALL trades against strong higher timeframe trend ***
+            # This catches ML-driven and technical-driven trades that bypassed earlier filters
+            # CRITICAL: This prevents synchronized buying during market selloffs
+            if signal and not use_training_data:
+                if higher_tf_trend['confidence'] >= 0.7:
+                    if signal == 'BUY' and higher_tf_trend['trend'] == 'downtrend':
+                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%})')
+                        signal = None
+                        confidence = 0
+                    elif signal == 'SELL' and higher_tf_trend['trend'] == 'uptrend':
+                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%})')
+                        signal = None
+                        confidence = 0
             
             return {
                 'signal': signal,
