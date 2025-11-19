@@ -1,290 +1,57 @@
 # ZimAI Trader - AI-Powered Trading Platform
 
 ## Overview
-
-ZimAI Trader is an AI-powered trading platform that enables automated trading on US stock markets through Alpaca's paper trading API. The platform features:
-
-## Recent Updates (Nov 19, 2025)
-
-### Ghost Position Elimination - Complete Fix ✅
-
-**Problem**: Database showed "open" trades for positions that Alpaca already closed (via PDT restrictions, stop-loss, etc.), causing phantom losses in analytics.
-
-**Root Cause**: When Alpaca closes positions externally, the local database wasn't updated, creating "ghost" positions.
-
-**Complete Solution**:
-1. **AI Trading Loop** now checks Alpaca (not database) for existing positions - prevents duplicate buys
-2. **Trade API** fetches open positions from Alpaca only - eliminates ghost visibility in UI
-3. **Reconciliation Service** preserves trade history by marking externally-closed positions as "closed" with Alpaca's P&L data (NOT deleting them) - ensures ML training data is preserved
-4. **Manual cleanup command**: `python manage.py reconcile_positions`
-
-**Architecture Change**: Alpaca is now the **single source of truth** for open positions. Database stores only closed trade history for ML training.
-
-
-
-- **Autonomous AI Trading Agent**: Runs 24/7 during market hours, executing trades based on machine learning predictions and technical analysis
-- **Multi-Market Support**: Focuses on US markets (NYSE/NASDAQ) with timezone-aware market hours tracking
-- **Machine Learning Engine**: Random Forest classifier that learns from historical trade data to improve predictions
-- **Real-time Market Data**: Integration with Alpaca Market Data API v2 for live quotes and snapshots
-- **Advanced Risk Management**: Stop-loss, take-profit, trailing stops, and position sizing
-- **User Management**: Role-based access control (Admin, Compliance Officer, Trader, User)
+ZimAI Trader is an AI-powered platform designed for automated trading on US stock markets using Alpaca's paper trading API. Its core purpose is to execute trades based on machine learning predictions and technical analysis, aiming to generate profits autonomously. Key capabilities include 24/7 operation during market hours, real-time market data integration, advanced risk management features, and a sophisticated machine learning engine that learns from historical trade data to refine its predictions. The project aims to provide a robust, AI-driven solution for automated stock market participation.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
 ### Frontend Architecture
-
-**Technology Stack:**
-- React 18.3 with TypeScript
-- Vite for build tooling and development server
-- TanStack Query (React Query) for server state management
-- React Router for client-side routing
-- Shadcn/UI component library (Radix UI primitives)
-- Tailwind CSS for styling
-
-**Design Decisions:**
-- **SPA Architecture**: Single-page application with client-side routing to provide smooth navigation
-- **Component-Based UI**: Reusable components built on Radix UI primitives for accessibility
-- **State Management**: Context API for trading state (`TradingContext`), React Query for server state
-- **Cache Busting**: Aggressive no-cache headers and version stamping to prevent stale UI (`vite-plugin-version.ts`)
-- **Error Handling**: ErrorBoundary component to catch and display React errors gracefully
-- **Responsive Design**: Mobile-first approach with container-based layouts
-
-**Key Features:**
-- Real-time market data visualization (disabled polling to reduce API calls)
-- Trading dashboard with position management
-- AI trading toggle controls
-- Autonomous agent status monitoring
-- Profile and balance history views
+The frontend is a Single-Page Application (SPA) built with React 18.3 and TypeScript, utilizing Vite for tooling. It employs TanStack Query for server state management, React Router for navigation, and Shadcn/UI (based on Radix UI primitives) for a component-based, accessible, and responsive user interface styled with Tailwind CSS. Key features include real-time market data visualization, a trading dashboard, AI trading controls, and user account management.
 
 ### Backend Architecture
-
-**Technology Stack:**
-- Django 5.2.7 with Django REST Framework
-- PostgreSQL database (via environment configuration)
-- JWT authentication (custom implementation)
-- Gunicorn WSGI server for production
-- Background worker for autonomous trading agent
-
-**Design Patterns:**
-- **Service Layer Pattern**: Business logic separated into service classes (`AITradingEngine`, `MarketDataService`, `MLTradingModel`, `AlpacaAccountService`)
-- **Authentication Middleware**: Custom JWT authentication extending DRF's `BaseAuthentication`
-- **Role-Based Access Control**: `UserRole` model with permission classes (`IsAdmin`, `IsComplianceOfficer`)
-- **Background Processing**: Autonomous agent runs as separate thread with continuous market monitoring
+The backend is developed with Django 5.2.7 and Django REST Framework, using PostgreSQL for data storage. It features a custom JWT authentication system and runs with Gunicorn in production. The architecture incorporates a Service Layer Pattern to separate business logic and includes a background worker for the autonomous trading agent.
 
 **Core Services:**
+- **AI Trading Engine:** Executes trades based on ML predictions and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk, and multi-timeframe trend detection filters to prevent trades against strong market trends.
+- **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. It supports automatic retraining, versioned model storage, and can operate in a bootstrap mode using only technical analysis if no ML model is available.
+- **Market Data Service:** Gathers real-time and historical market data from Alpaca Market Data API v2 (primary) and Yahoo Finance (fallback), with thread-safe caching and rate limit handling.
+- **Alpaca Account Service:** Manages account balance and positions with intelligent caching and request deduplication.
+- **Autonomous Agent Service:** Operates 24/7 during US market hours, performing per-user reconciliation and supporting multi-timezone market hours tracking.
+- **Market Hours Service:** Provides timezone-aware market open/close detection for US markets.
 
-1. **AI Trading Engine** (`ai_trading_engine.py`):
-   - Executes trades based on ML predictions and technical indicators (RSI, MACD, Bollinger Bands)
-   - **RSI Override Logic** (v4.2 - Nov 2025):
-     * RSI < 30 (extremely oversold) → Forces BUY signal regardless of MACD disagreement
-     * RSI > 70 (extremely overbought) → Forces SELL signal regardless of MACD disagreement
-     * Overrides normal 2+ indicator agreement requirement in rare, high-probability reversal zones
-     * Minimum 60% confidence for extreme RSI signals
-   - **Smart Position Sizing** (v4.2 - Nov 2025):
-     * Auto-adjusts position size to stay within 25% concentration limit per symbol
-     * Instead of blocking trades, reduces quantity to fit within risk limits
-     * Example: If 10% allocation would exceed 25% concentration, automatically reduces to maximum allowed quantity
-   - **Trend Detection Filters** (v4.1 - Nov 2025):
-     * EMA 50/200 crossover trend detection on 1-minute timeframe
-     * SuperTrend indicator for momentum confirmation
-     * Higher timeframe (15M, 400 bars = ~4 days) trend check blocks trades against strong trends (70%+ confidence)
-     * Hard-blocks prevent execution when signals contradict major trend direction
-   - Integrates with Alpaca trading API for order execution
-   - Implements advanced risk management (position sizing, stop-loss, take-profit, trailing stops)
+**Database Models:** Custom Django models handle users, trades, transactions, audit logs, user roles, ML model registry, tradable instruments, broker account summaries, and blacklisted JWT tokens.
 
-2. **Machine Learning Service** (`ml_training_service.py`):
-   - Random Forest classifier with **38 features** (upgraded from 30 features - Nov 2025)
-   - **Loss Pattern Learning** (v4.0):
-     * Drawdown zone detection (is_in_drawdown, drawdown_severity)
-     * Volatility spike recognition (is_volatility_spike, volatility_regime)
-     * High-loss condition avoidance (is_high_loss_condition, recent_loss_streak)
-     * Similar past loss pattern matching (similar_past_losses, loss_pattern_score)
-   - Chronological feature extraction ensures accurate cumulative PnL and loss streak tracking
-   - Automatic retraining every 24 hours when sufficient trade data exists
-   - Versioned model storage with performance metrics tracking and automatic old-model invalidation
-   - Bootstrap mode allows trading without ML model (falls back to technical analysis)
-
-3. **Market Data Service** (`market_data_service.py`):
-   - Dual-source: Alpaca Market Data API v2 (primary) and Yahoo Finance (fallback)
-   - Thread-safe caching with TTL-based expiration (60s for quotes, 30s for snapshots)
-   - Batch fetching optimization to reduce API calls from 1200/min to <65/min
-   - Rate limit handling with exponential backoff
-
-4. **Alpaca Account Service** (`alpaca_account_service.py`):
-   - Account balance and position management
-   - Intelligent caching system with category-specific TTLs (60s for account, 30s for positions)
-   - Request deduplication to prevent redundant API calls
-
-5. **Autonomous Agent Service** (`autonomous_agent_service.py`):
-   - 24/7 operation during market hours (9:30 AM - 4:00 PM EST, Mon-Fri)
-   - Per-user reconciliation to prevent orphaned positions
-   - Multi-timezone market hours tracking
-   - Configurable check intervals (default 60s)
-
-6. **Market Hours Service** (`market_hours_service.py`):
-   - Timezone-aware market open/close detection
-   - Currently supports US markets only (NYSE/NASDAQ)
-   - Extensible for future international markets
-
-**Database Models:**
-- `User`: Custom user model with trading balances, AI toggle, approval workflow
-- `Trade`: Trade execution records with P&L tracking
-- `Transaction`: Deposit/withdrawal/P&L transactions
-- `AuditLog`: Immutable audit trail for compliance
-- `UserRole`: Role assignments for RBAC
-- `ModelRegistry`: ML model version tracking
-- `TradableInstrument`: Supported trading symbols
-- `BrokerAccountSummary`: Broker account snapshots
-- `BlacklistedToken`: JWT token revocation
-
-**API Design:**
-- RESTful endpoints under `/api/` prefix
-- JWT bearer token authentication
-- Versioned responses for cache busting
-- CORS enabled for cross-origin requests
-- Health check endpoint for monitoring
+**API Design:** RESTful endpoints with JWT authentication, versioned responses, CORS support, and a health check endpoint.
 
 ### Deployment Architecture
-
-**Deployment Requirements:**
-- **Reserved VM**: Required for background autonomous trading agent (Autoscale does not support background processes)
-- **Port 5000**: Web server listens on port 5000
-- **Build Command**: `bash build-production.sh`
-- **Run Command**: `bash start-production.sh`
-
-**Static Files:**
-- Vite builds React app to `dist/` with hash-based asset names
-- Django serves static files from `backend/staticfiles/` in production
-- Base path `/static/` for production assets
-
-**Environment Variables:**
-- `DJANGO_SECRET_KEY`: Django secret key (required)
-- `ALPACA_API_KEY`: Alpaca API key for trading
-- `ALPACA_API_SECRET`: Alpaca API secret
-- `DATABASE_URL`: PostgreSQL connection string (optional, uses SQLite if not set)
-- `DEBUG`: Set to `True` for development (defaults to `False`)
-- `ALLOWED_HOSTS`: Comma-separated list of allowed hosts (defaults to `*`)
-
-**Cache Control:**
-- Custom `NoCacheMiddleware` prevents browser caching of HTML
-- Aggressive no-cache headers for index.html to prevent stale UI errors
-- Service worker cleanup on page load
-
-**Security:**
-- CSRF protection enabled
-- Secure cookies in production (HTTPS only)
-- HSTS headers for HTTPS enforcement
-- XSS protection headers
-- CORS configured for cross-origin requests
+The platform requires a reserved VM for the continuous operation of the autonomous trading agent. It utilizes `bash build-production.sh` and `bash start-production.sh` for deployment, serving static files from `dist/` (frontend) and `backend/staticfiles/` (Django). Environment variables manage sensitive configurations, and aggressive cache control mechanisms are in place. Security measures include CSRF protection, secure cookies, HSTS, XSS protection, and CORS configuration.
 
 ## External Dependencies
 
 ### Third-Party Services
-
-1. **Alpaca Markets API**
-   - **Purpose**: Stock trading and market data
-   - **Integration**: Paper trading API for simulated trading
-   - **Endpoints Used**:
-     - Trading API: Order submission, position management
-     - Market Data API v2: Real-time quotes, snapshots, historical bars
-   - **Authentication**: API key + secret (HMAC headers)
-   - **Rate Limits**: Optimized with caching and batch requests (<65 calls/min)
-
-2. **Yahoo Finance** (yfinance library)
-   - **Purpose**: Fallback market data source
-   - **Use Case**: Historical data for ML training when Alpaca is unavailable
-   - **Integration**: Python library for data fetching
+1.  **Alpaca Markets API**: Used for simulated stock trading (paper trading API) and real-time market data (Market Data API v2), including order execution, position management, quotes, snapshots, and historical bars. Authentication via API key and secret.
+2.  **Yahoo Finance**: Serves as a fallback market data source, primarily for historical data used in ML training.
 
 ### Python Dependencies
-
-**Core Framework:**
-- `django==5.2.7`: Web framework
-- `djangorestframework`: REST API framework
-- `gunicorn`: WSGI production server
-
-**Machine Learning:**
-- `scikit-learn==1.7.2`: Random Forest classifier
-- `numpy==1.26.4`: Numerical computing
-- `pandas==2.2.2`: Data manipulation
-- `joblib==1.3.2`: Model serialization
-- `scipy==1.12.0`: Scientific computing
-
-**Authentication:**
-- `PyJWT`: JWT token generation/validation
-- Custom JWT authentication class
-
-**Market Data:**
-- `yfinance`: Yahoo Finance API client
-- `requests`: HTTP client for Alpaca API
-
-**Database:**
-- `psycopg2`: PostgreSQL adapter (optional)
-- SQLite (default, no external dependency)
+-   **Core Framework**: `django`, `djangorestframework`, `gunicorn`.
+-   **Machine Learning**: `scikit-learn` (Random Forest), `numpy`, `pandas`, `joblib`, `scipy`.
+-   **Authentication**: `PyJWT`.
+-   **Market Data**: `yfinance`, `requests`.
+-   **Database**: `psycopg2` (for PostgreSQL).
 
 ### Frontend Dependencies
-
-**UI Framework:**
-- `react==18.3.1`: Core library
-- `react-dom==18.3.1`: DOM rendering
-- `react-router-dom`: Client-side routing
-
-**State Management:**
-- `@tanstack/react-query==5.83.0`: Server state management
-- Context API for global trading state
-
-**UI Components:**
-- `@radix-ui/*`: Accessible component primitives (20+ packages)
-- `lucide-react==0.462.0`: Icon library
-- `tailwindcss`: Utility-first CSS framework
-- `class-variance-authority`: Variant-based component styling
-- `clsx`: Conditional class names
-
-**Forms:**
-- `react-hook-form`: Form state management
-- `@hookform/resolvers`: Form validation
-- `zod`: Schema validation
-
-**Utilities:**
-- `date-fns==3.6.0`: Date manipulation
-- `embla-carousel-react`: Carousel component
-
-**Build Tools:**
-- `vite`: Build tool and dev server
-- `@vitejs/plugin-react-swc`: React plugin with SWC compiler
-- `typescript`: Type checking
-- `eslint`: Code linting
+-   **UI Framework**: `react`, `react-dom`, `react-router-dom`.
+-   **State Management**: `@tanstack/react-query`, React Context API.
+-   **UI Components**: `@radix-ui/*`, `lucide-react`, `tailwindcss`, `class-variance-authority`, `clsx`.
+-   **Forms**: `react-hook-form`, `@hookform/resolvers`, `zod`.
+-   **Utilities**: `date-fns`, `embla-carousel-react`.
+-   **Build Tools**: `vite`, `@vitejs/plugin-react-swc`, `typescript`, `eslint`.
 
 ### Database
-
-**Current Setup:**
-- SQLite (default, file-based)
-- PostgreSQL support via `DATABASE_URL` environment variable
-
-**Schema Management:**
-- Django ORM for migrations
-- Models defined in `api/models.py` and `accounts/models.py`
-
-**Future Considerations:**
-- The application uses Django's ORM, which is database-agnostic
-- Drizzle ORM is not currently used, but could be added for TypeScript-based schema management
-- PostgreSQL recommended for production (better concurrency, JSON support, full-text search)
+The project primarily uses SQLite by default, with robust support for PostgreSQL via the `DATABASE_URL` environment variable. Django ORM handles schema migrations.
 
 ### Monitoring & Logging
-
-**Logging:**
-- Python `logging` module with structured logs
-- API call metrics logging (efficiency tracking)
-- Trade execution logs with P&L tracking
-
-**Health Checks:**
-- `/api/health/` endpoint for uptime monitoring
-- Autonomous agent status endpoint
-
-**Performance Tracking:**
-- API call counters for rate limit monitoring
-- Cache hit/miss metrics
-- ML model performance metrics (accuracy, precision, recall)
+Utilizes Python's `logging` module for structured logs, API call metrics, and trade execution tracking. A `/api/health/` endpoint is provided for uptime monitoring.
