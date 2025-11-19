@@ -96,12 +96,11 @@ class Command(BaseCommand):
                             )
                         
                         # 🎯 SMART SYMBOL SELECTION: Prioritize NEW symbols for diversity
-                        # Get symbols already in portfolio
-                        existing_symbols = set(
-                            Trade.objects.filter(user=user, status='open', instrument_type='stock')
-                            .values_list('symbol', flat=True)
-                            .distinct()
-                        )
+                        # Get symbols already in portfolio FROM ALPACA (source of truth - prevents duplicate buys!)
+                        from api.alpaca_account_service import AlpacaAccountService
+                        alpaca_service_temp = AlpacaAccountService()
+                        alpaca_positions = alpaca_service_temp.get_positions(user)
+                        existing_symbols = {pos['symbol'] for pos in alpaca_positions}
                         
                         # Prefer NEW symbols (not in portfolio) to build diversity first
                         new_symbols = [s for s in stock_symbols if s not in existing_symbols]

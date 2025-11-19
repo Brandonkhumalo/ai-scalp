@@ -28,18 +28,36 @@ class PositionReconciliationService:
         """
         Reconcile database open trades with Alpaca positions for a user.
         
+        IMPORTANT: This preserves trade history by marking externally-closed positions 
+        as "closed" instead of deleting them. This ensures ML training data is not lost.
+        
         Returns:
             dict: {
                 'ghosts_removed': int,
+                'positions_closed': int,
                 'positions_synced': int,
                 'alpaca_positions': int,
                 'database_positions': int
             }
         """
         try:
-            # Get Alpaca positions (source of truth)
+            from decimal import Decimal
+            from django.utils import timezone
+            
+            # Get Alpaca positions (source of truth for OPEN positions)
             alpaca_positions = self.alpaca_service.get_positions(user)
             alpaca_symbols = {pos['symbol']: float(pos['qty']) for pos in alpaca_positions}
+            
+            # Get Alpaca CLOSED positions (last 30 days) to preserve trade history
+            # Use 30 days to catch positions closed during market holidays, weekends, etc.
+            try:
+                alpaca_closed = self.alpaca_service.get_closed_positions_with_pnl(days_back=30)
+                alpaca_closed_map = {pos['symbol']: pos for pos in alpaca_closed}
+                logger.info(f"Fetched {len(alpaca_closed)} closed positions from Alpaca (30 day lookback)")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not fetch Alpaca closed positions: {e}")
+                logger.warning(f"   Reconciliation will NOT delete trades (preserving history safely)")
+                alpaca_closed_map = None  # Signal that we don't have closed position data
             
             # Get database open trades
             db_open_trades = Trade.objects.filter(
@@ -49,32 +67,62 @@ class PositionReconciliationService:
             
             initial_db_count = db_open_trades.count()
             ghosts_removed = 0
+            positions_closed = 0
             seen_symbols = set()
             
             # Process each database trade
             for trade in db_open_trades:
-                should_delete = False
+                should_remove = False
+                should_close = False
                 reason = None
                 
-                # Check 1: Symbol no longer on Alpaca
+                # Check 1: Symbol no longer on Alpaca (may be externally closed)
                 if trade.symbol not in alpaca_symbols:
-                    should_delete = True
-                    reason = "symbol not on Alpaca (closed externally)"
+                    # Try to find it in Alpaca's closed positions (if available)
+                    if alpaca_closed_map is not None and trade.symbol in alpaca_closed_map:
+                        should_close = True
+                        reason = "closed by Alpaca (preserving history)"
+                    elif alpaca_closed_map is None:
+                        # No closed position data available - KEEP trade to avoid data loss!
+                        logger.info(f"⚠️ Skipping {trade.symbol} - no Alpaca closed data (keeping for safety)")
+                        continue
+                    else:
+                        should_remove = True
+                        reason = "symbol not found on Alpaca (orphaned - not in last 30 days)"
                 
                 # Check 2: Duplicate entry for same symbol
                 elif trade.symbol in seen_symbols:
-                    should_delete = True
+                    should_remove = True
                     reason = "duplicate entry"
                 
-                if should_delete:
+                if should_close:
+                    # Mark as closed with Alpaca's P&L data (preserves trade history!)
+                    alpaca_data = alpaca_closed_map[trade.symbol]
+                    trade.status = 'closed'
+                    trade.exit_price = Decimal(str(alpaca_data.get('exit_price', trade.entry_price)))
+                    trade.pnl = Decimal(str(alpaca_data.get('realized_pnl', 0)))
+                    trade.closed_at = timezone.now()
+                    trade.save()
+                    positions_closed += 1
+                    
                     if verbose:
                         logger.info(
-                            f"👻 Removing ghost: {trade.symbol} "
+                            f"✅ Closed: {trade.symbol} "
+                            f"{trade.side} {trade.quantity} @ ${trade.entry_price} "
+                            f"P&L: ${trade.pnl} ({reason})"
+                        )
+                
+                elif should_remove:
+                    # Delete only true orphans (no history to preserve)
+                    if verbose:
+                        logger.info(
+                            f"👻 Removing orphan: {trade.symbol} "
                             f"{trade.side} {trade.quantity} @ ${trade.entry_price} "
                             f"({reason})"
                         )
                     trade.delete()
                     ghosts_removed += 1
+                
                 else:
                     seen_symbols.add(trade.symbol)
             
@@ -82,16 +130,18 @@ class PositionReconciliationService:
             
             result = {
                 'ghosts_removed': ghosts_removed,
+                'positions_closed': positions_closed,
                 'positions_synced': final_db_count,
                 'alpaca_positions': len(alpaca_positions),
                 'database_positions': final_db_count,
                 'in_sync': final_db_count == len(alpaca_positions)
             }
             
-            if verbose and ghosts_removed > 0:
+            if verbose and (ghosts_removed > 0 or positions_closed > 0):
                 logger.info(
                     f"✅ Reconciliation complete for {user.email}: "
-                    f"Removed {ghosts_removed} ghosts, "
+                    f"Closed {positions_closed} positions, "
+                    f"Removed {ghosts_removed} orphans, "
                     f"{final_db_count} positions in sync with Alpaca"
                 )
             
@@ -101,6 +151,7 @@ class PositionReconciliationService:
             logger.error(f"❌ Reconciliation failed for {user.email}: {str(e)}")
             return {
                 'ghosts_removed': 0,
+                'positions_closed': 0,
                 'positions_synced': 0,
                 'alpaca_positions': 0,
                 'database_positions': 0,

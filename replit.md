@@ -4,6 +4,24 @@
 
 ZimAI Trader is an AI-powered trading platform that enables automated trading on US stock markets through Alpaca's paper trading API. The platform features:
 
+## Recent Updates (Nov 19, 2025)
+
+### Ghost Position Elimination - Complete Fix ✅
+
+**Problem**: Database showed "open" trades for positions that Alpaca already closed (via PDT restrictions, stop-loss, etc.), causing phantom losses in analytics.
+
+**Root Cause**: When Alpaca closes positions externally, the local database wasn't updated, creating "ghost" positions.
+
+**Complete Solution**:
+1. **AI Trading Loop** now checks Alpaca (not database) for existing positions - prevents duplicate buys
+2. **Trade API** fetches open positions from Alpaca only - eliminates ghost visibility in UI
+3. **Reconciliation Service** preserves trade history by marking externally-closed positions as "closed" with Alpaca's P&L data (NOT deleting them) - ensures ML training data is preserved
+4. **Manual cleanup command**: `python manage.py reconcile_positions`
+
+**Architecture Change**: Alpaca is now the **single source of truth** for open positions. Database stores only closed trade history for ML training.
+
+
+
 - **Autonomous AI Trading Agent**: Runs 24/7 during market hours, executing trades based on machine learning predictions and technical analysis
 - **Multi-Market Support**: Focuses on US markets (NYSE/NASDAQ) with timezone-aware market hours tracking
 - **Machine Learning Engine**: Random Forest classifier that learns from historical trade data to improve predictions
