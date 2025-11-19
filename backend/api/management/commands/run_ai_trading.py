@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from api.ai_trading_engine import AITradingEngine
 from api.ml_training_service import MLTradingModel
+from api.position_reconciliation_service import PositionReconciliationService
 from api.models import Trade
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class Command(BaseCommand):
         
         engine = AITradingEngine(alpaca_api_key, alpaca_api_secret)
         ml_model = MLTradingModel()
+        reconciliation_service = PositionReconciliationService()
         last_retrain_check = {}
         
         # Trading symbols: Equities only (stocks during market hours)
@@ -46,6 +48,15 @@ class Command(BaseCommand):
                 
                 for user in users:
                     try:
+                        # 🔄 AUTO-RECONCILIATION: Sync database with Alpaca positions (removes ghosts)
+                        reconcile_result = reconciliation_service.reconcile_user_positions(user, verbose=False)
+                        if reconcile_result.get('ghosts_removed', 0) > 0:
+                            self.stdout.write(
+                                self.style.WARNING(
+                                    f'🔄 Reconciled {user.email}: Removed {reconcile_result["ghosts_removed"]} ghost positions'
+                                )
+                            )
+                        
                         # 🧠 ML RETRAINING: Check if model should be retrained for this user
                         user_id = str(user.id)
                         last_training = last_retrain_check.get(user_id)

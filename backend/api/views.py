@@ -55,14 +55,41 @@ class TradeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from .market_data_service import MarketDataService
         from .alpaca_account_service import AlpacaAccountService
         import logging
         logger = logging.getLogger(__name__)
         
-        trades = Trade.objects.filter(user=request.user).order_by('-created_at')
-        market_service = MarketDataService()
         alpaca_service = AlpacaAccountService()
+        data = []
+        
+        # PART 1: Fetch OPEN positions from Alpaca (source of truth - no ghost positions!)
+        try:
+            alpaca_positions = alpaca_service.get_positions(request.user)
+            for pos in alpaca_positions:
+                data.append({
+                    'id': f"alpaca_{pos['symbol']}",
+                    'instrument_type': 'stock',
+                    'symbol': pos['symbol'],
+                    'broker': 'alpaca_sim',
+                    'quantity': float(pos['qty']),
+                    'entry_price': float(pos['avg_entry_price']),
+                    'exit_price': None,
+                    'current_price': float(pos['current_price']),
+                    'side': 'buy' if float(pos['qty']) > 0 else 'sell',
+                    'status': 'open',
+                    'profit_loss': float(pos['unrealized_pl']),
+                    'pnl': float(pos['unrealized_pl']),
+                    'ai_confidence': None,
+                    'ai_signal_type': None,
+                    'created_at': None,
+                    'closed_at': None,
+                })
+            logger.info(f"✅ Fetched {len(alpaca_positions)} OPEN positions from Alpaca (source of truth)")
+        except Exception as e:
+            logger.error(f"❌ Error fetching Alpaca positions: {e}")
+        
+        # PART 2: Fetch CLOSED trades from database (for historical data)
+        closed_trades = Trade.objects.filter(user=request.user, status='closed').order_by('-created_at')
         
         # Fetch Alpaca closed positions with realized P&L (last 30 days)
         alpaca_closed_positions = {}
@@ -79,54 +106,13 @@ class TradeListView(APIView):
         except Exception as e:
             logger.error(f"Error fetching Alpaca closed positions: {e}")
         
-        data = []
-        for t in trades:
-            # Calculate real-time P&L for open trades
+        # PART 3: Process CLOSED trades from database and add to data
+        for t in closed_trades:
             profit_loss = t.profit_loss
-            current_price = None
-            
-            if t.status == 'open' and t.entry_price:
-                try:
-                    
-                        # Default: Get price from Alpaca (for alpaca_sim broker)
-                    snapshot = market_service.get_realtime_snapshot(t.symbol)
-                        
-                    if snapshot:
-                        latest_quote = snapshot.get('latestQuote', {})
-                        latest_trade = snapshot.get('latestTrade', {})
-                            
-                        bid = latest_quote.get('bp')
-                        ask = latest_quote.get('ap')
-                        trade_price = latest_trade.get('p')
-                            
-                            # Calculate mid-price ONLY if both bid and ask are valid (> 0)
-                        if bid is not None and ask is not None and bid > 0 and ask > 0:
-                            current_price = (float(bid) + float(ask)) / 2
-                            # Use bid if only bid is valid
-                        elif bid is not None and bid > 0:
-                            current_price = float(bid)
-                            # Use ask if only ask is valid
-                        elif ask is not None and ask > 0:
-                            current_price = float(ask)
-                            # Fallback to latest trade price
-                        elif trade_price is not None and trade_price > 0:
-                            current_price = float(trade_price)
-                    
-                    # Calculate P&L if we have current price
-                    if current_price and current_price > 0:
-                        # Convert Decimal to float for calculation
-                        quantity_float = float(t.quantity)
-                        entry_price_float = float(t.entry_price)
-                        
-                        if t.side.lower() == 'buy':
-                            profit_loss = (float(current_price) - entry_price_float) * quantity_float
-                        else:
-                            profit_loss = (entry_price_float - float(current_price)) * quantity_float
-                except Exception as e:
-                    logger.error(f'Error calculating P&L for trade {t.id} ({t.symbol}): {str(e)}')
+            current_price = t.exit_price
             
             # Enrich CLOSED trades with Alpaca's realized P&L if available
-            if t.status == 'closed' and t.closed_at and t.broker == 'alpaca_sim':
+            if t.closed_at and t.broker == 'alpaca_sim':
                 # Try to match with Alpaca closed position data
                 from datetime import datetime, timedelta
                 
