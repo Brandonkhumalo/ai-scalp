@@ -53,9 +53,10 @@ class Command(BaseCommand):
                         
                         if ml_model.should_retrain(last_training, closed_trades_count):
                             self.stdout.write(f'🧠 Retraining ML model for {user.email}...')
-                            user_trades = Trade.objects.filter(user=user, status='closed').order_by('-created_at')[:100]
+                            # Convert to list to avoid "Cannot filter after slice" error
+                            user_trades = list(Trade.objects.filter(user=user, status='closed').order_by('-created_at')[:100])
                             
-                            if user_trades.exists():
+                            if user_trades:
                                 retrain_result = ml_model.train(user_trades)
                                 if retrain_result.get('success'):
                                     last_retrain_check[user_id] = datetime.now()
@@ -136,7 +137,7 @@ class Command(BaseCommand):
                                 )
                     
                     except Exception as e:
-                        logger.error(f'Error executing trade for {user.email}: {str(e)}')
+                        logger.exception(f'Error executing trade for {user.email}')
                         self.stdout.write(
                             self.style.ERROR(f'❌ {user.email}: {str(e)}')
                         )
