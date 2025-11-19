@@ -346,22 +346,24 @@ class AITradingEngine:
             
             ml_prediction = ml_model.predict(ml_features)
             
-            # Add ML signal if model is available and confident (60%+ temporarily, was 70%)
-            if ml_prediction['model_available'] and ml_prediction['confidence'] > 0.60:
+            # Add ML signal if model is available and confident (75%+ for high-quality trades)
+            if ml_prediction['model_available'] and ml_prediction['confidence'] > 0.75:
                 if ml_prediction['prediction'] == 1:  # Profitable trade predicted
                     # ML suggests this is a good trade opportunity with high confidence
                     signal_strength += int(ml_prediction['confidence'] * 30)  # Up to 30 points for high confidence
-                    logger.info(f"ML model predicts profitable trade with {ml_prediction['confidence']:.2%} confidence")
+                    logger.info(f"✅ ML model predicts PROFIT with {ml_prediction['confidence']:.2%} confidence (STRONG)")
                 else:
-                    # ML suggests avoiding this trade (reduced penalty to allow more trades)
-                    signal_strength -= 10  # Reduced from -20 to allow more trades
-                    logger.info(f"ML model predicts unprofitable trade with {ml_prediction['confidence']:.2%} confidence")
-            elif ml_prediction['model_available'] and ml_prediction['confidence'] > 0.55:
-                # Medium confidence (55-60%) - moderate trade support
+                    # ML suggests avoiding this trade
+                    signal_strength -= 20  # Strong penalty for predicted losses
+                    logger.warning(f"⚠️ ML model predicts LOSS with {ml_prediction['confidence']:.2%} confidence (STRONG)")
+            elif ml_prediction['model_available'] and ml_prediction['confidence'] > 0.65:
+                # Medium confidence (65-75%) - moderate trade support
                 if ml_prediction['prediction'] == 1:
                     signal_strength += int(ml_prediction['confidence'] * 15)  # Moderate weight
+                    logger.info(f"💡 ML model predicts PROFIT with {ml_prediction['confidence']:.2%} confidence (MEDIUM)")
                 else:
-                    signal_strength -= 5  # Reduced from -8
+                    signal_strength -= 10  # Moderate penalty
+                    logger.warning(f"⚠️ ML model predicts LOSS with {ml_prediction['confidence']:.2%} confidence (MEDIUM)")
             
             # Volume confirmation
             if volume_surge:
@@ -394,7 +396,7 @@ class AITradingEngine:
             
             if rsi < 30:
                 # Check if higher timeframe allows this BUY
-                if higher_tf_trend['confidence'] >= 0.7 and higher_tf_trend['trend'] == 'downtrend':
+                if higher_tf_trend['confidence'] >= 0.6 and higher_tf_trend['trend'] == 'downtrend':
                     # CRITICAL: Block execution completely - return no signal to prevent buying falling knife
                     rsi_override_blocked_by_trend = True
                     logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} < 30 but 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%}) - NOT buying falling knife!')
@@ -518,17 +520,17 @@ class AITradingEngine:
             
             logger.info(f'{symbol}: buy_signals={buy_signals}, sell_signals={sell_signals}, signal_strength={signal_strength}, ML={ml_prediction}')
             
-            # AI-FIRST TRADING: Allow trades based on strong ML confidence (≥60% temporarily, was ≥70%) even with weak technical signals
+            # AI-FIRST TRADING: Allow trades based on strong ML confidence (≥75%) even with weak technical signals
             # This enables pure ML-driven trading when technical indicators are insufficient
-            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.60:
+            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.75:
                 if ml_prediction['prediction'] == 1:  # ML predicts profitable trade
                     signal = 'BUY'
                     confidence = min(max(signal_strength, 50), 95)  # Minimum 50 confidence for ML-only trades
                     logger.info(f'✅ ML-driven trade signal: {signal} with {ml_prediction["confidence"]:.1%} ML confidence')
-                # If ML predicts loss with ≥60% confidence, don't trade even if technical signals suggest it
+                # If ML predicts loss with ≥75% confidence, don't trade even if technical signals suggest it
                 elif ml_prediction['prediction'] == 0:
                     signal = None
-                    logger.info(f'⛔ ML model predicts loss with {ml_prediction["confidence"]:.1%} confidence - trade blocked')
+                    logger.warning(f'⛔ ML model predicts LOSS with {ml_prediction["confidence"]:.1%} confidence - trade BLOCKED')
             
             # TECHNICAL SIGNAL OVERRIDE: If we have strong technical agreement (≥2 indicators), use that
             # This allows technical analysis to override ML when signals are very clear
@@ -543,13 +545,13 @@ class AITradingEngine:
             # This catches ML-driven and technical-driven trades that bypassed earlier filters
             # CRITICAL: This prevents synchronized buying during market selloffs
             if signal and not use_training_data:
-                if higher_tf_trend['confidence'] >= 0.7:
+                if higher_tf_trend['confidence'] >= 0.6:
                     if signal == 'BUY' and higher_tf_trend['trend'] == 'downtrend':
-                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%})')
+                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows downtrend ({higher_tf_trend["confidence"]:.1%})')
                         signal = None
                         confidence = 0
                     elif signal == 'SELL' and higher_tf_trend['trend'] == 'uptrend':
-                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%})')
+                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows uptrend ({higher_tf_trend["confidence"]:.1%})')
                         signal = None
                         confidence = 0
             
@@ -771,7 +773,7 @@ class AITradingEngine:
                     return {'action': 'none', 'message': 'No open trades'}
                 
                 # SCALPING PARAMETERS (Adjusted for better position visibility)
-                PROFIT_TARGET = Decimal('0.01')  # 1% profit target per trade (scalping)
+                PROFIT_TARGET = Decimal('0.015')  # 1.5% profit target per trade (scalping with staying power)
                 STOP_LOSS = Decimal('0.02')  # 2% stop-loss per trade
                 
                 market_service = MarketDataService()
@@ -988,10 +990,9 @@ class AITradingEngine:
             if not analysis or not analysis['signal']:
                 return {'success': False, 'message': 'No clear trading signal', 'analysis': analysis}
             
-            # ML QUALITY GATE: Minimum 60% ML confidence required (TEMPORARILY REDUCED from 70%)
+            # ML QUALITY GATE: Minimum 75% ML confidence required for high-quality trades
             # Bootstrap Mode: Skip ML checks when user.ml_bootstrap_mode=True (allows trading with technical analysis only)
-            # NOTE: Threshold temporarily at 60% to accumulate more training data with clean Alpaca history
-            # Will be restored to 70% once model has ≥50 closed trades for robust training
+            # NOTE: Raised from 60% to 75% to ensure only high-confidence predictions are executed
             ml_data = analysis.get('ml_prediction', {})
             
             if not user.ml_bootstrap_mode:
@@ -1005,13 +1006,13 @@ class AITradingEngine:
                 
                 # Reject if ML predicts loss
                 if ml_pred == 0:
-                    logger.info(f"⛔ Trade rejected: ML predicts LOSS with {ml_conf:.1%} confidence for {symbol}")
+                    logger.warning(f"⛔ Trade rejected: ML predicts LOSS with {ml_conf:.1%} confidence for {symbol}")
                     return {'success': False, 'message': f'ML model predicts unprofitable trade ({ml_conf:.1%} confidence)', 'analysis': analysis}
                 
-                # Reject if ML confidence below 60% (TEMPORARY THRESHOLD - will return to 70% after more data)
-                if ml_conf < 0.60:
-                    logger.info(f"⛔ Trade rejected: ML confidence {ml_conf:.1%} below 60% threshold for {symbol}")
-                    return {'success': False, 'message': f'ML confidence below 60% threshold ({ml_conf:.1%})', 'analysis': analysis}
+                # Reject if ML confidence below 75% (HIGH-QUALITY THRESHOLD)
+                if ml_conf < 0.75:
+                    logger.info(f"⛔ Trade rejected: ML confidence {ml_conf:.1%} below 75% threshold for {symbol}")
+                    return {'success': False, 'message': f'ML confidence below 75% threshold ({ml_conf:.1%})', 'analysis': analysis}
             else:
                 # BOOTSTRAP MODE: Trading with technical analysis only (≥2 agreeing indicators already enforced)
                 logger.info(f"🚀 BOOTSTRAP MODE: Executing trade without ML model (technical analysis only) for {symbol}")
@@ -1127,7 +1128,7 @@ class AITradingEngine:
             # For BUY orders: stop_loss below entry, take_profit above
             # For SELL orders: stop_loss above entry, take_profit below
             stop_loss_pct = 0.02  # 2% stop-loss
-            take_profit_pct = 0.01  # 1% take-profit (scalping)
+            take_profit_pct = 0.015  # 1.5% take-profit (scalping with staying power)
             
             if analysis['signal'].lower() == 'buy':
                 stop_loss_price = round(current_price * (1 - stop_loss_pct), 2)
