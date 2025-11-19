@@ -3,6 +3,24 @@
 ## Overview
 ZimAI Trader is an AI-powered platform designed for automated trading on US stock markets using Alpaca's paper trading API. Its core purpose is to execute trades based on machine learning predictions and technical analysis, aiming to generate profits autonomously. Key capabilities include 24/7 operation during market hours, real-time market data integration, advanced risk management features, and a sophisticated machine learning engine that learns from historical trade data to refine its predictions. The project aims to provide a robust, AI-driven solution for automated stock market participation.
 
+## Recent Changes
+
+### November 19, 2025: Trading Quality Improvements
+**Objective:** Reduce losing trades and improve profit staying power.
+
+**Key Changes:**
+1. **ML Confidence Threshold**: Raised from 60% to 75% - system now only executes high-quality predictions
+2. **FINAL GUARD Protection**: Lowered trend confidence requirement from 70% to 60% to catch more falling stocks
+3. **Profit Target**: Increased from 1% to 1.5% to give positions better staying power
+4. **ML Training Data**: Removed [:100] trade limit to train on ALL closed trades (374 trades)
+5. **Enhanced Logging**: Added STRONG/MEDIUM labels to ML predictions for better visibility
+
+**Impact:**
+- Trades with <75% ML confidence are now rejected (previously accepted at 60%)
+- More falling stocks blocked by FINAL GUARD (60% vs 70% trend confidence requirement)
+- ML model trained on complete trading history (90% profitable ratio with 10% losing trades included)
+- Positions have 50% more profit target room before auto-closing
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
@@ -15,8 +33,8 @@ The frontend is a Single-Page Application (SPA) built with React 18.3 and TypeSc
 The backend is developed with Django 5.2.7 and Django REST Framework, using PostgreSQL for data storage. It features a custom JWT authentication system and runs with Gunicorn in production. The architecture incorporates a Service Layer Pattern to separate business logic and includes a background worker for the autonomous trading agent.
 
 **Core Services:**
-- **AI Trading Engine:** Executes trades based on ML predictions and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk, and multi-timeframe trend detection filters to prevent trades against strong market trends.
-- **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. It supports automatic retraining, versioned model storage, and can operate in a bootstrap mode using only technical analysis if no ML model is available.
+- **AI Trading Engine:** Executes trades based on ML predictions (≥75% confidence required) and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk (25% max concentration), 1.5% profit target scalping, 2% stop-loss, and multi-timeframe trend detection filters (FINAL GUARD at ≥60% trend confidence) to prevent trades against strong market trends.
+- **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. It supports automatic retraining on ALL closed trades, versioned model storage, and can operate in a bootstrap mode using only technical analysis if no ML model is available. Current model version 4.1 trained on 374 trades with 90% profitable ratio.
 - **Market Data Service:** Gathers real-time and historical market data from Alpaca Market Data API v2 (primary) and Yahoo Finance (fallback), with thread-safe caching and rate limit handling.
 - **Alpaca Account Service:** Manages account balance and positions with intelligent caching and request deduplication.
 - **Autonomous Agent Service:** Operates 24/7 during US market hours, performing per-user reconciliation and supporting multi-timezone market hours tracking.
