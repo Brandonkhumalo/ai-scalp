@@ -1,0 +1,76 @@
+================================================================================
+AI TRADING MODEL - LEARNING LOG
+================================================================================
+
+Training Date: 2025-11-20 16:31:39
+
+--------------------------------------------------------------------------------
+TRAINING SUMMARY
+--------------------------------------------------------------------------------
+Total Trades Analyzed: 472
+Training Samples: 222
+Test Samples: 56
+Profitable Trade Ratio: 87.41%
+
+--------------------------------------------------------------------------------
+MODEL PERFORMANCE
+--------------------------------------------------------------------------------
+Training Accuracy: 99.55%
+Testing Accuracy: 100.00%
+
+Previous Test Accuracy: 100.00%
+Improvement: +0.00%
+= No change in performance
+
+--------------------------------------------------------------------------------
+WHAT THE AI LEARNED - FEATURE IMPORTANCE
+--------------------------------------------------------------------------------
+(Higher values = more important for predicting profitable trades)
+
+1. Symbol_Concentration_After [0.1017] █████
+2. Recent_Loss_Streak [0.0900] ████
+3. MACD_Strength   [0.0879] ████
+4. Volume          [0.0849] ████
+5. BB_Upper        [0.0723] ███
+6. BB_Width        [0.0700] ███
+7. BB_Middle       [0.0699] ███
+8. Volume_Normalized [0.0698] ███
+9. Volatility      [0.0620] ███
+10. Side            [0.0600] ██
+11. Volatility_Volume_Ratio [0.0550] ██
+12. BB_Lower        [0.0549] ██
+13. Trend_Strength  [0.0410] ██
+14. Portfolio_Diversity_Score [0.0224] █
+15. Portfolio_Unique_Symbols [0.0200] 
+16. Portfolio_Max_Concentration [0.0150] 
+17. Portfolio_Total_Positions [0.0140] 
+18. Trend_Direction [0.0030] 
+19. Similar_Past_Losses [0.0027] 
+20. RSI             [0.0022] 
+21. MACD            [0.0010] 
+22. MACD_Signal     [0.0001] 
+23. RSI_Oversold    [0.0001] 
+24. Symbol_Concentration_Before [0.0000] 
+25. Loss_Pattern_Score [0.0000] 
+26. Price_Change    [0.0000] 
+27. Is_High_Loss_Condition [0.0000] 
+28. MACD_Bullish    [0.0000] 
+29. RSI_Neutral     [0.0000] 
+30. RSI_Overbought  [0.0000] 
+31. BB_Position     [0.0000] 
+32. High_Volatility [0.0000] 
+33. Low_Volatility  [0.0000] 
+34. RSI_MACD_Alignment [0.0000] 
+35. Is_In_Drawdown  [0.0000] 
+36. Drawdown_Severity [0.0000] 
+37. Is_Volatility_Spike [0.0000] 
+38. Volatility_Regime [0.0000] 
+
+--------------------------------------------------------------------------------
+KEY INSIGHTS
+--------------------------------------------------------------------------------
+• Most Critical Indicator: Symbol_Concentration_After (10.17% importance)
+• High Success Rate: 87% of trades were profitable
+• Strong Predictive Power: 100% accuracy on test data
+
+================================================================================
