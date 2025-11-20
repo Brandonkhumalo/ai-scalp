@@ -346,8 +346,8 @@ class AITradingEngine:
             
             ml_prediction = ml_model.predict(ml_features)
             
-            # Add ML signal if model is available and confident (75%+ for high-quality trades)
-            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.75:
+            # Add ML signal if model is available and confident (65%+ for quality trades)
+            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.65:
                 if ml_prediction['prediction'] == 1:  # Profitable trade predicted
                     # ML suggests this is a good trade opportunity with high confidence
                     signal_strength += int(ml_prediction['confidence'] * 30)  # Up to 30 points for high confidence
@@ -356,8 +356,8 @@ class AITradingEngine:
                     # ML suggests avoiding this trade
                     signal_strength -= 20  # Strong penalty for predicted losses
                     logger.warning(f"⚠️ ML model predicts LOSS with {ml_prediction['confidence']:.2%} confidence (STRONG)")
-            elif ml_prediction['model_available'] and ml_prediction['confidence'] > 0.65:
-                # Medium confidence (65-75%) - moderate trade support
+            elif ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.50:
+                # Medium confidence (50-65%) - moderate trade support
                 if ml_prediction['prediction'] == 1:
                     signal_strength += int(ml_prediction['confidence'] * 15)  # Moderate weight
                     logger.info(f"💡 ML model predicts PROFIT with {ml_prediction['confidence']:.2%} confidence (MEDIUM)")
@@ -520,14 +520,14 @@ class AITradingEngine:
             
             logger.info(f'{symbol}: buy_signals={buy_signals}, sell_signals={sell_signals}, signal_strength={signal_strength}, ML={ml_prediction}')
             
-            # AI-FIRST TRADING: Allow trades based on strong ML confidence (≥75%) even with weak technical signals
+            # AI-FIRST TRADING: Allow trades based on strong ML confidence (≥65%) even with weak technical signals
             # This enables pure ML-driven trading when technical indicators are insufficient
-            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.75:
+            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.65:
                 if ml_prediction['prediction'] == 1:  # ML predicts profitable trade
                     signal = 'BUY'
                     confidence = min(max(signal_strength, 50), 95)  # Minimum 50 confidence for ML-only trades
                     logger.info(f'✅ ML-driven trade signal: {signal} with {ml_prediction["confidence"]:.1%} ML confidence')
-                # If ML predicts loss with ≥75% confidence, don't trade even if technical signals suggest it
+                # If ML predicts loss with ≥65% confidence, don't trade even if technical signals suggest it
                 elif ml_prediction['prediction'] == 0:
                     signal = None
                     logger.warning(f'⛔ ML model predicts LOSS with {ml_prediction["confidence"]:.1%} confidence - trade BLOCKED')
@@ -990,9 +990,9 @@ class AITradingEngine:
             if not analysis or not analysis['signal']:
                 return {'success': False, 'message': 'No clear trading signal', 'analysis': analysis}
             
-            # ML QUALITY GATE: Minimum 75% ML confidence required for high-quality trades
+            # ML QUALITY GATE: Minimum 65% ML confidence required for high-quality trades
             # Bootstrap Mode: Skip ML checks when user.ml_bootstrap_mode=True (allows trading with technical analysis only)
-            # NOTE: Raised from 60% to 75% to ensure only high-confidence predictions are executed
+            # NOTE: Adjusted to 65% to balance trade quality with volume
             ml_data = analysis.get('ml_prediction', {})
             
             if not user.ml_bootstrap_mode:
@@ -1009,10 +1009,10 @@ class AITradingEngine:
                     logger.warning(f"⛔ Trade rejected: ML predicts LOSS with {ml_conf:.1%} confidence for {symbol}")
                     return {'success': False, 'message': f'ML model predicts unprofitable trade ({ml_conf:.1%} confidence)', 'analysis': analysis}
                 
-                # Reject if ML confidence below 75% (HIGH-QUALITY THRESHOLD)
-                if ml_conf < 0.75:
-                    logger.info(f"⛔ Trade rejected: ML confidence {ml_conf:.1%} below 75% threshold for {symbol}")
-                    return {'success': False, 'message': f'ML confidence below 75% threshold ({ml_conf:.1%})', 'analysis': analysis}
+                # Reject if ML confidence below 65% (QUALITY THRESHOLD)
+                if ml_conf < 0.65:
+                    logger.info(f"⛔ Trade rejected: ML confidence {ml_conf:.1%} below 65% threshold for {symbol}")
+                    return {'success': False, 'message': f'ML confidence below 65% threshold ({ml_conf:.1%})', 'analysis': analysis}
             else:
                 # BOOTSTRAP MODE: Trading with technical analysis only (≥2 agreeing indicators already enforced)
                 logger.info(f"🚀 BOOTSTRAP MODE: Executing trade without ML model (technical analysis only) for {symbol}")

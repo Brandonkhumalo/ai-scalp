@@ -5,21 +5,21 @@ ZimAI Trader is an AI-powered platform designed for automated trading on US stoc
 
 ## Recent Changes
 
-### November 19, 2025: Trading Quality Improvements
-**Objective:** Reduce losing trades and improve profit staying power.
+### November 20, 2025: ML Confidence Threshold Adjustment
+**Objective:** Balance trade quality with trading volume.
 
 **Key Changes:**
-1. **ML Confidence Threshold**: Raised from 60% to 75% - system now only executes high-quality predictions
-2. **FINAL GUARD Protection**: Lowered trend confidence requirement from 70% to 60% to catch more falling stocks
-3. **Profit Target**: Increased from 1% to 1.5% to give positions better staying power
-4. **ML Training Data**: Removed [:100] trade limit to train on ALL closed trades (374 trades)
-5. **Enhanced Logging**: Added STRONG/MEDIUM labels to ML predictions for better visibility
+1. **ML Confidence Threshold**: Adjusted to 65% (from 75%) - balances quality with activity
+2. **Bootstrap Mode**: Disabled to ensure ML confidence checks are always enforced
+3. **FINAL GUARD Protection**: Maintained at 60% trend confidence to catch falling stocks
+4. **Profit Target**: 1.5% for better staying power
+5. **ML Training**: Trained on 492 complete trades (90% profitable ratio)
 
 **Impact:**
-- Trades with <75% ML confidence are now rejected (previously accepted at 60%)
-- More falling stocks blocked by FINAL GUARD (60% vs 70% trend confidence requirement)
-- ML model trained on complete trading history (90% profitable ratio with 10% losing trades included)
-- Positions have 50% more profit target room before auto-closing
+- Trades require ≥65% ML confidence AND profit prediction to execute
+- More trading opportunities while maintaining quality standards
+- Bootstrap mode disabled prevents bypassing ML quality gates
+- System properly enforces all ML-based trade filters
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -33,7 +33,7 @@ The frontend is a Single-Page Application (SPA) built with React 18.3 and TypeSc
 The backend is developed with Django 5.2.7 and Django REST Framework, using PostgreSQL for data storage. It features a custom JWT authentication system and runs with Gunicorn in production. The architecture incorporates a Service Layer Pattern to separate business logic and includes a background worker for the autonomous trading agent.
 
 **Core Services:**
-- **AI Trading Engine:** Executes trades based on ML predictions (≥75% confidence required) and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk (25% max concentration), 1.5% profit target scalping, 2% stop-loss, and multi-timeframe trend detection filters (FINAL GUARD at ≥60% trend confidence) to prevent trades against strong market trends.
+- **AI Trading Engine:** Executes trades based on ML predictions (≥65% confidence required) and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk (25% max concentration), 1.5% profit target scalping, 2% stop-loss, and multi-timeframe trend detection filters (FINAL GUARD at ≥60% trend confidence) to prevent trades against strong market trends.
 - **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. It supports automatic retraining on ALL closed trades, versioned model storage, and can operate in a bootstrap mode using only technical analysis if no ML model is available. Current model version 4.1 trained on 374 trades with 90% profitable ratio.
 - **Market Data Service:** Gathers real-time and historical market data from Alpaca Market Data API v2 (primary) and Yahoo Finance (fallback), with thread-safe caching and rate limit handling.
 - **Alpaca Account Service:** Manages account balance and positions with intelligent caching and request deduplication.
