@@ -335,6 +335,8 @@ class AlpacaAccountService:
             time_in_force: 'day', 'gtc', etc.
             stop_loss: Stop-loss price (for bracket orders)
             take_profit: Take-profit price (for bracket orders)
+        
+        Note: Fractional orders MUST be simple orders (no bracket orders allowed by Alpaca)
         """
         url = f"{self.alpaca_trading_url}/v2/orders"
         payload = {
@@ -345,7 +347,11 @@ class AlpacaAccountService:
             'time_in_force': time_in_force,
         }
         
-        if stop_loss is not None or take_profit is not None:
+        is_fractional = qty % 1 != 0
+        
+        if is_fractional:
+            logger.info(f'🔸 Placing simple order for {qty} shares of {symbol} (fractional shares require simple orders)')
+        elif stop_loss is not None or take_profit is not None:
             payload['order_class'] = 'bracket'
             
             if stop_loss is not None:
@@ -357,6 +363,8 @@ class AlpacaAccountService:
                 payload['take_profit'] = {
                     'limit_price': take_profit
                 }
+            
+            logger.info(f'🎯 Placing bracket order for {qty} shares of {symbol} (SL: {stop_loss}, TP: {take_profit})')
         
         return self._make_request(
             'POST',
