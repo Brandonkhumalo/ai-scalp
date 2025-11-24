@@ -75,7 +75,7 @@ class AlpacaAccountService:
         self.alpaca_api_key = os.getenv('ALPACA_API_KEY')
         self.alpaca_api_secret = os.getenv('ALPACA_API_SECRET')
         self.alpaca_data_url = 'https://data.alpaca.markets'
-        self.alpaca_trading_url = 'https://paper-api.alpaca.markets'
+        self.alpaca_trading_url = 'https://api.alpaca.markets'
         
         # Shared cache instance
         self.cache = AlpacaAccountCache()

@@ -12,7 +12,7 @@ class Command(BaseCommand):
         # Get Alpaca credentials
         alpaca_api_key = os.getenv('ALPACA_API_KEY')
         alpaca_secret_key = os.getenv('ALPACA_SECRET_KEY')
-        alpaca_base_url = "https://paper-api.alpaca.markets"
+        alpaca_base_url = "https://api.alpaca.markets"
         
         headers = {
             'APCA-API-KEY-ID': alpaca_api_key,
