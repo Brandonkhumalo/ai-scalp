@@ -28,8 +28,16 @@ export const PnLChart = () => {
           return;
         }
 
+        // Get performance analytics for accurate realized P&L
+        let realizedPnL = 0;
+        try {
+          const analytics = await apiClient.get('/performance-analytics/');
+          realizedPnL = analytics.netPnL || 0;
+        } catch (err) {
+          console.error('Error fetching analytics for chart:', err);
+        }
+        
         // Convert Alpaca snapshots to chart data points
-        const startingEquity = 100000; // Assumed starting balance
         const dataPoints: PnLDataPoint[] = [];
         
         // Group by date and take the latest snapshot per day
@@ -48,13 +56,13 @@ export const PnLChart = () => {
         // Convert to sorted array using pre-calculated daily P&L from Alpaca
         const sortedDates = Object.entries(snapshotsByDate).sort(([dateA], [dateB]) => dateA.localeCompare(dateB));
         
+        // Calculate cumulative P&L from daily changes
+        let cumulativePnL = 0;
+        
         sortedDates.forEach(([date, snapshot]: [string, any]) => {
-          const equity = snapshot.equity;
-          const cumulativePnL = equity - startingEquity;
-          
           // Use Alpaca's pre-calculated daily P&L (equity - last_equity from yesterday)
-          // This ensures consistency with dashboard values
           const dailyPnL = snapshot.daily_pl || 0;
+          cumulativePnL += dailyPnL;
           
           dataPoints.push({
             date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -63,6 +71,11 @@ export const PnLChart = () => {
             timestamp: new Date(date).getTime()
           });
         });
+        
+        // Override the last point with actual realized P&L for accuracy
+        if (dataPoints.length > 0 && realizedPnL !== 0) {
+          dataPoints[dataPoints.length - 1].cumulativePnL = realizedPnL;
+        }
 
         setChartData(dataPoints);
         setTotalPnL(dataPoints.length > 0 ? dataPoints[dataPoints.length - 1].cumulativePnL : 0);
