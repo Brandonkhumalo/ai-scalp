@@ -103,7 +103,7 @@ export function TradingProvider({ children }: { children: ReactNode }) {
         alpacaData = await apiClient.get('/alpaca-account/');
         if (alpacaData) {
           const currentEquity = alpacaData.account?.equity || 0;
-          const lastEquity = alpacaData.account?.last_equity || 100000; // Default starting balance
+          const lastEquity = alpacaData.account?.last_equity || currentEquity;
           
           // Calculate total unrealized P&L from positions
           const unrealizedPnL = alpacaData.positions?.details?.reduce(
@@ -111,9 +111,17 @@ export function TradingProvider({ children }: { children: ReactNode }) {
             0
           ) || 0;
           
-          // Total P&L = current equity - starting balance (last_equity represents previous day)
-          // For a more accurate all-time P&L, we use current equity - 100000 (assumed starting balance)
-          const totalPnL = currentEquity - 100000;
+          // Fetch performance analytics to get accurate total realized P&L
+          let totalRealizedPnL = 0;
+          try {
+            const analytics = await apiClient.get('/performance-analytics/');
+            totalRealizedPnL = analytics.netPnL || 0;
+          } catch (err) {
+            console.error('Error fetching analytics:', err);
+          }
+          
+          // Total P&L = realized P&L from closed trades + unrealized P&L from open positions
+          const totalPnL = totalRealizedPnL + unrealizedPnL;
           
           // Daily P&L = current equity - last equity (previous day's closing)
           const dailyPnL = currentEquity - lastEquity;

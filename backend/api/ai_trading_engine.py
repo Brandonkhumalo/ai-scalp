@@ -1053,10 +1053,12 @@ class AITradingEngine:
             
             # Get current price
             current_price = analysis['current_price']
-            # For equities (stocks and options), use whole numbers
-            quantity = int(position_value / current_price)
+            # Support fractional shares for small balances (round to 8 decimal places for precision)
+            quantity = round(position_value / current_price, 8)
             
-            if quantity <= 0:
+            # Minimum trade: 0.001 shares or $1, whichever is larger
+            min_quantity = max(0.001, 1.0 / current_price)
+            if quantity < min_quantity:
                 return {'success': False, 'message': 'Insufficient buying power'}
             
             # Calculate total trade cost
@@ -1095,10 +1097,11 @@ class AITradingEngine:
                         }
                     }
                 
-                # Reduce quantity to fit within limit
-                adjusted_quantity = int(float(max_new_trade_value) / current_price)
+                # Reduce quantity to fit within limit (support fractional shares)
+                adjusted_quantity = round(float(max_new_trade_value) / current_price, 8)
                 
-                if adjusted_quantity <= 0:
+                min_quantity = max(0.001, 1.0 / current_price)
+                if adjusted_quantity < min_quantity:
                     logger.info(f'❌ Trade blocked for {user.email}: Adjusted quantity too small ({adjusted_quantity} shares)')
                     return {
                         'success': False,
