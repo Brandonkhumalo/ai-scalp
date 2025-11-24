@@ -604,11 +604,9 @@ class CloseProfitableTradesView(APIView):
                         
                         # Create database record for tracking (without touching user balance)
                         with db_transaction.atomic():
-                            user = User.objects.select_for_update().get(id=request.user.id)
-                            
                             # Create trade record
                             Trade.objects.create(
-                                user=user,
+                                user=request.user,
                                 symbol=symbol,
                                 instrument_type='stock',
                                 side='buy' if side == 'long' else 'sell',
@@ -623,7 +621,7 @@ class CloseProfitableTradesView(APIView):
                             
                             # Create transaction record
                             Transaction.objects.create(
-                                user=user,
+                                user=request.user,
                                 type='trade_pnl',
                                 amount=unrealized_pl,
                                 currency='USD',
