@@ -483,36 +483,13 @@ class AITradingEngine:
                             'ml_prediction': ml_prediction,
                             'trend_filter': 'BLOCKED: 15M downtrend blocks BUY'
                         }
-                    elif higher_tf_trend['trend'] == 'uptrend' and sell_signals > buy_signals:
-                        logger.warning(f'⛔ Trend Filter: Blocking SELL signal - 15M timeframe shows strong uptrend')
-                        trend_filter_blocked = True
-                        return {
-                            'signal': None,
-                            'confidence': 0,
-                            'momentum': momentum,
-                            'rsi': rsi,
-                            'macd': macd_line,
-                            'macd_signal': signal_line,
-                            'macd_histogram': histogram,
-                            'bb_upper': upper_band,
-                            'bb_middle': middle_band,
-                            'bb_lower': lower_band,
-                            'volume': avg_volume,
-                            'volume_surge': volume_surge,
-                            'volatility': volatility,
-                            'current_price': current_price,
-                            'ml_prediction': ml_prediction,
-                            'trend_filter': 'BLOCKED: 15M uptrend blocks SELL'
-                        }
                 
-                # Boost confidence for trades aligned with trend
+                # Boost confidence for BUY trades aligned with uptrend
+                # NOTE: SHORT SELLING DISABLED - No SELL signal boost
                 if not trend_filter_blocked:
                     if higher_tf_trend['trend'] == 'uptrend' and buy_signals > sell_signals:
                         signal_strength += int(higher_tf_trend['confidence'] * 20)
                         logger.info(f'✅ Trend Filter: BUY aligned with 15M uptrend - boosting confidence')
-                    elif higher_tf_trend['trend'] == 'downtrend' and sell_signals > buy_signals:
-                        signal_strength += int(higher_tf_trend['confidence'] * 20)
-                        logger.info(f'✅ Trend Filter: SELL aligned with 15M downtrend - boosting confidence')
             
             # Determine final signal based on majority vote
             signal = None
@@ -534,24 +511,18 @@ class AITradingEngine:
             
             # TECHNICAL SIGNAL OVERRIDE: If we have strong technical agreement (≥2 indicators), use that
             # This allows technical analysis to override ML when signals are very clear
+            # NOTE: SHORT SELLING DISABLED - Only BUY signals allowed
             if buy_signals > sell_signals and buy_signals >= 2:
                 signal = 'BUY'
                 confidence = min(max(signal_strength, 0), 95)
-            elif sell_signals > buy_signals and sell_signals >= 2:
-                signal = 'SELL'
-                confidence = min(max(signal_strength, 0), 95)
             
-            # *** FINAL GUARD: Block ALL trades against strong higher timeframe trend ***
+            # *** FINAL GUARD: Block ALL BUY trades against strong higher timeframe downtrend ***
             # This catches ML-driven and technical-driven trades that bypassed earlier filters
             # CRITICAL: This prevents synchronized buying during market selloffs
             if signal and not use_training_data:
                 if higher_tf_trend['confidence'] >= 0.6:
                     if signal == 'BUY' and higher_tf_trend['trend'] == 'downtrend':
                         logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows downtrend ({higher_tf_trend["confidence"]:.1%})')
-                        signal = None
-                        confidence = 0
-                    elif signal == 'SELL' and higher_tf_trend['trend'] == 'uptrend':
-                        logger.warning(f'⛔ FINAL GUARD: Blocking {signal} for {symbol} - 15M shows uptrend ({higher_tf_trend["confidence"]:.1%})')
                         signal = None
                         confidence = 0
             
