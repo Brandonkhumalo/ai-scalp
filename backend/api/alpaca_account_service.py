@@ -568,6 +568,19 @@ class AlpacaAccountService:
             priority=self.PRIORITY_CRITICAL
         )
     
+    def get_order_status(self, order_id: str) -> Optional[Dict]:
+        """
+        Get specific order by ID to check status (filled, partially_filled, etc.)
+        
+        Priority: CRITICAL (no caching)
+        """
+        url = f"{self.alpaca_trading_url}/v2/orders/{order_id}"
+        return self._make_request(
+            'GET',
+            url,
+            priority=self.PRIORITY_CRITICAL
+        )
+    
     def get_quote(self, symbol: str, force_refresh: bool = False) -> Optional[Dict]:
         """
         Get latest quote for a symbol with caching

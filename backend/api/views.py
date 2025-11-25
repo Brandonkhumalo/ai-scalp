@@ -589,8 +589,8 @@ class CloseProfitableTradesView(APIView):
                     logger.info(f"Alpaca order_result for {symbol}: {order_result}")
                     
                     if order_result and order_result.get('id'):
-                        closed_count += 1
-                        total_realized_profit += unrealized_pl
+                        # Order submitted successfully - now verify position actually closed
+                        # Use robust verify_position_closed() with retry/backoff logic
                         
                         close_details.append({
                             'symbol': symbol,
@@ -599,35 +599,57 @@ class CloseProfitableTradesView(APIView):
                             'exit_price': current_price,
                             'quantity': qty,
                             'pnl': unrealized_pl,
-                            'order_id': order_result.get('id')
+                            'order_id': order_result.get('id'),
+                            'status': 'order_submitted'
                         })
                         
-                        # Create database record for tracking (without touching user balance)
-                        with db_transaction.atomic():
-                            # Create trade record
-                            Trade.objects.create(
-                                user=request.user,
-                                symbol=symbol,
-                                instrument_type='stock',
-                                side='buy' if side == 'long' else 'sell',
-                                quantity=qty,
-                                entry_price=avg_entry_price,
-                                exit_price=current_price,
-                                profit_loss=unrealized_pl,
-                                status='closed',
-                                closed_at=timezone.now(),
-                                broker_deal_id=order_result.get('id')
-                            )
+                        # Verify position closed using production-grade method with retry logic
+                        position_confirmed_closed = alpaca_service.verify_position_closed(
+                            symbol=symbol,
+                            max_retries=3,
+                            retry_delay=2.0
+                        )
+                        
+                        if position_confirmed_closed:
+                            # Position actually closed! Count it and update P&L
+                            closed_count += 1
+                            total_realized_profit += unrealized_pl
+                            close_details[-1]['status'] = 'confirmed_closed'
                             
-                            # Create transaction record
-                            Transaction.objects.create(
-                                user=request.user,
-                                type='trade_pnl',
-                                amount=unrealized_pl,
-                                currency='USD',
-                                reference=f'Alpaca {symbol} Position Closed (Profit: ${unrealized_pl:.2f})',
-                                status='completed'
-                            )
+                            logger.info(f"✅ Confirmed: {symbol} position closed by Alpaca. P&L: ${unrealized_pl:.2f}")
+                            
+                            # NOW persist the confirmed close to database
+                            try:
+                                with db_transaction.atomic():
+                                    Trade.objects.create(
+                                        user=request.user,
+                                        symbol=symbol,
+                                        instrument_type='stock',
+                                        side='buy' if side == 'long' else 'sell',
+                                        quantity=qty,
+                                        entry_price=avg_entry_price,
+                                        exit_price=current_price,
+                                        profit_loss=unrealized_pl,
+                                        status='closed',
+                                        closed_at=timezone.now(),
+                                        broker_deal_id=order_result.get('id')
+                                    )
+                                    
+                                    Transaction.objects.create(
+                                        user=request.user,
+                                        type='trade_pnl',
+                                        amount=unrealized_pl,
+                                        currency='USD',
+                                        reference=f'Alpaca {symbol} Position Closed (Confirmed P&L: ${unrealized_pl:.2f})',
+                                        status='completed'
+                                    )
+                                    logger.info(f"📝 Database updated: {symbol} close recorded")
+                            except Exception as db_error:
+                                logger.error(f"Failed to persist {symbol} close to database: {db_error}")
+                        else:
+                            # Position still exists - Alpaca rejected the close (likely PDT)
+                            close_details[-1]['status'] = 'rejected_pdt'
+                            logger.warning(f"⚠️ Position {symbol} still open - Alpaca likely rejected due to PDT restrictions")
                     else:
                         error_msg = f'Alpaca order placement failed. order_result: {order_result}'
                         logger.error(f"{symbol}: {error_msg}")
@@ -1243,20 +1265,38 @@ class AlpacaAccountView(APIView):
 
 class PerformanceAnalyticsView(APIView):
     """
-    Calculate performance analytics from local database trades
-    Shows only trades executed through the ZimAI platform (post-algorithm update)
+    Calculate performance analytics from REAL Alpaca closed positions data
+    Uses Alpaca's activity API to get actual closed trades (not database records)
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
-            # Fetch closed trades from local database
-            closed_trades = Trade.objects.filter(
-                user=request.user,
-                closed_at__isnull=False
-            ).order_by('-closed_at')
+            # Get REAL closed positions from Alpaca API (last 30 days)
+            from .alpaca_account_service import AlpacaAccountService
+            alpaca_service = AlpacaAccountService()
             
-            if not closed_trades.exists():
+            try:
+                closed_positions = alpaca_service.get_closed_positions_with_pnl(days_back=30)
+            except Exception as alpaca_error:
+                # Alpaca API failed - fallback to database with warning
+                logger.warning(f"Alpaca API failed for performance analytics: {alpaca_error}. Falling back to database records.")
+                closed_trades = Trade.objects.filter(
+                    user=request.user,
+                    closed_at__isnull=False
+                ).order_by('-closed_at')
+                
+                # Convert database trades to same format as Alpaca data
+                closed_positions = []
+                for trade in closed_trades:
+                    closed_positions.append({
+                        'symbol': trade.symbol,
+                        'realized_pnl': float(trade.profit_loss) if trade.profit_loss else 0,
+                        'open_time': trade.created_at.isoformat() if trade.created_at else None,
+                        'close_time': trade.closed_at.isoformat() if trade.closed_at else None
+                    })
+            
+            if not closed_positions:
                 return Response({
                     'totalTrades': 0,
                     'winningTrades': 0,
@@ -1274,27 +1314,30 @@ class PerformanceAnalyticsView(APIView):
                     'roi': 0
                 }, status=status.HTTP_200_OK)
             
-            # Calculate metrics from local trades
+            # Calculate metrics from REAL Alpaca closed positions
             winning_trades = []
             losing_trades = []
             total_hold_time = 0
             
-            for trade in closed_trades:
-                pl = float(trade.profit_loss) if trade.profit_loss else 0
+            for position in closed_positions:
+                pl = float(position.get('realized_pnl', 0))
                 
                 if pl > 0:
                     winning_trades.append(pl)
                 elif pl < 0:
                     losing_trades.append(abs(pl))
                 
-                # Calculate hold time
-                if trade.created_at and trade.closed_at:
-                    hold_time_hours = (trade.closed_at - trade.created_at).total_seconds() / 3600
+                # Calculate hold time (if available from Alpaca data)
+                if position.get('open_time') and position.get('close_time'):
+                    from dateutil import parser as date_parser
+                    open_time = date_parser.parse(position['open_time'])
+                    close_time = date_parser.parse(position['close_time'])
+                    hold_time_hours = (close_time - open_time).total_seconds() / 3600
                     total_hold_time += hold_time_hours
             
             if not winning_trades and not losing_trades:
                 return Response({
-                    'totalTrades': closed_trades.count(),
+                    'totalTrades': len(closed_positions),
                     'winningTrades': 0,
                     'losingTrades': 0,
                     'winRate': 0,
