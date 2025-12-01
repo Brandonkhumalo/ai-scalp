@@ -48,8 +48,8 @@ export default function App() {
         throw new Error(data.error || 'Login failed');
       }
 
-      await AsyncStorage.setItem('access_token', data.access_token);
-      await AsyncStorage.setItem('refresh_token', data.refresh_token);
+      await AsyncStorage.setItem('access_token', data.accessToken);
+      await AsyncStorage.setItem('refresh_token', data.refreshToken);
       setUser(data.user);
       setIsLoggedIn(true);
     } catch (error: any) {
