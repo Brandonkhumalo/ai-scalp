@@ -1,7 +1,7 @@
 {
   "name": "zimai-trader-mobile",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "App.tsx",
   "scripts": {
     "start": "EXPO_NO_TYPESCRIPT_SETUP=true expo start --tunnel",
     "start:local": "expo start",
