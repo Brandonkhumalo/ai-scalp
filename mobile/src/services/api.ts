@@ -40,13 +40,12 @@ class APIClient {
   }
 
   private async request(endpoint: string, options: RequestInit = {}): Promise<Response> {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
     };
 
     if (this.accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -57,7 +56,7 @@ class APIClient {
     if (response.status === 401 && this.refreshToken) {
       const refreshed = await this.refreshAccessToken();
       if (refreshed) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
+        headers['Authorization'] = `Bearer ${this.accessToken}`;
         return fetch(`${API_BASE_URL}${endpoint}`, {
           ...options,
           headers,
