@@ -84,9 +84,10 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
               >
                 <Ionicons
-                  name={showPassword ? 'eye-off' : 'eye'}
+                  name={showPassword ? "eye-off" : "eye"}
                   size={22}
                   color="#888"
                 />
