@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
+    "@expo/ngrok": "^4.1.0",
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
   },

@@ -26,6 +26,10 @@ args = "Vite Frontend"
 task = "workflow.run"
 args = "Django Backend"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Expo Mobile App"
+
 [[workflows.workflow]]
 name = "AI Trading Scheduler"
 author = "agent"
@@ -57,6 +61,17 @@ author = "agent"
 task = "shell.exec"
 args = "cd backend && python manage.py runserver 0.0.0.0:8000"
 waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Expo Mobile App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd mobile && npm start"
 
 [workflows.workflow.metadata]
 outputType = "console"
