@@ -1,0 +1,76 @@
+================================================================================
+AI TRADING MODEL - LEARNING LOG
+================================================================================
+
+Training Date: 2025-11-28 15:21:16
+
+--------------------------------------------------------------------------------
+TRAINING SUMMARY
+--------------------------------------------------------------------------------
+Total Trades Analyzed: 52
+Training Samples: 38
+Test Samples: 10
+Profitable Trade Ratio: 54.17%
+
+--------------------------------------------------------------------------------
+MODEL PERFORMANCE
+--------------------------------------------------------------------------------
+Training Accuracy: 100.00%
+Testing Accuracy: 90.00%
+
+Previous Test Accuracy: 90.00%
+Improvement: +0.00%
+= No change in performance
+
+--------------------------------------------------------------------------------
+WHAT THE AI LEARNED - FEATURE IMPORTANCE
+--------------------------------------------------------------------------------
+(Higher values = more important for predicting profitable trades)
+
+1. Recent_Loss_Streak [0.2132] ██████████
+2. Portfolio_Diversity_Score [0.1038] █████
+3. Symbol_Concentration_After [0.0991] ████
+4. Is_High_Loss_Condition [0.0659] ███
+5. Volume          [0.0568] ██
+6. BB_Upper        [0.0546] ██
+7. BB_Width        [0.0517] ██
+8. BB_Lower        [0.0422] ██
+9. Volume_Normalized [0.0418] ██
+10. Volatility_Volume_Ratio [0.0356] █
+11. BB_Middle       [0.0353] █
+12. Trend_Strength  [0.0333] █
+13. Volatility      [0.0332] █
+14. Price_Change    [0.0288] █
+15. Side            [0.0284] █
+16. Portfolio_Max_Concentration [0.0147] 
+17. Drawdown_Severity [0.0115] 
+18. Portfolio_Unique_Symbols [0.0108] 
+19. RSI_Neutral     [0.0079] 
+20. RSI             [0.0067] 
+21. Portfolio_Total_Positions [0.0066] 
+22. Symbol_Concentration_Before [0.0052] 
+23. Loss_Pattern_Score [0.0026] 
+24. Similar_Past_Losses [0.0026] 
+25. Trend_Direction [0.0023] 
+26. High_Volatility [0.0015] 
+27. Volatility_Regime [0.0012] 
+28. MACD_Strength   [0.0011] 
+29. MACD            [0.0008] 
+30. MACD_Signal     [0.0005] 
+31. RSI_Overbought  [0.0002] 
+32. Low_Volatility  [0.0000] 
+33. RSI_Oversold    [0.0000] 
+34. MACD_Bullish    [0.0000] 
+35. BB_Position     [0.0000] 
+36. RSI_MACD_Alignment [0.0000] 
+37. Is_In_Drawdown  [0.0000] 
+38. Is_Volatility_Spike [0.0000] 
+
+--------------------------------------------------------------------------------
+KEY INSIGHTS
+--------------------------------------------------------------------------------
+• Most Critical Indicator: Recent_Loss_Streak (21.32% importance)
+• Moderate Success Rate: 54% of trades were profitable
+• Strong Predictive Power: 90% accuracy on test data
+
+================================================================================
