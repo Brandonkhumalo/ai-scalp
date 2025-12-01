@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
 const API_BASE_URL = 'https://819f18d9-5e64-4c3f-acb6-496eb8feee18-00-3uwlbac2sdlrd.spock.replit.dev/api';
 
