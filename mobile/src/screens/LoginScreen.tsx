@@ -11,7 +11,6 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LoginScreenProps {
@@ -21,7 +20,6 @@ interface LoginScreenProps {
 export function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
 
@@ -72,29 +70,15 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Password</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="Enter your password"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={showPassword === true ? false : true}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off" : "eye"}
-                  size={22}
-                  color="#888"
-                />
-              </TouchableOpacity>
-            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor="#666"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={true}
+              autoCapitalize="none"
+            />
           </View>
 
           <TouchableOpacity
@@ -182,23 +166,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     borderWidth: 1,
     borderColor: '#333',
-  },
-  passwordContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0f0f0f',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  passwordInput: {
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-    color: '#fff',
-  },
-  eyeButton: {
-    padding: 16,
   },
   button: {
     backgroundColor: '#22c55e',
