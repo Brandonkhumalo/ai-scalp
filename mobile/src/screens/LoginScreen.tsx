@@ -79,7 +79,9 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
                 placeholderTextColor="#666"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                secureTextEntry={showPassword === true ? false : true}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity
                 style={styles.eyeButton}

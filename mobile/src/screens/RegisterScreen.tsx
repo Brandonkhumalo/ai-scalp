@@ -117,7 +117,9 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholderTextColor="#666"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                secureTextEntry={showPassword === true ? false : true}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity
                 style={styles.eyeButton}
@@ -142,7 +144,9 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
                 placeholderTextColor="#666"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
+                secureTextEntry={showConfirmPassword === true ? false : true}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity
                 style={styles.eyeButton}
