@@ -1,7 +1,7 @@
 {
   "success": true,
-  "timestamp": "2025-12-03T11:02:55.094834",
-  "trades_count": 87,
+  "timestamp": "2025-12-03T12:21:26.773857",
+  "trades_count": 104,
   "training_samples": 54,
   "test_samples": 14,
   "train_accuracy": 1.0,

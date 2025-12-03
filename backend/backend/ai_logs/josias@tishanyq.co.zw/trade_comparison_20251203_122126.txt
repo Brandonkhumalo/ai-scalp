@@ -1,0 +1,115 @@
+================================================================================
+TRADE COMPARISON - PAST 5 DAYS
+================================================================================
+
+Report Generated: 2025-12-03 12:21:26
+
+--------------------------------------------------------------------------------
+DATE: 2025-12-03
+--------------------------------------------------------------------------------
+Total Trades: 17
+Closed Trades: 17
+Win Rate: 0.0%
+Total P&L: $0.00
+Avg Profit per Trade: $0.00
+
+Trade Details:
+  1. AMZN     BUY  Entry: $234.37 -> Exit: $235.64 | P&L: +$0.00
+  2. GOOGL    BUY  Entry: $315.70 -> Exit: $316.36 | P&L: +$0.00
+  3. AMZN     BUY  Entry: $234.37 -> Exit: $235.64 | P&L: +$0.00
+  4. INTC     BUY  Entry: $43.48 -> Exit: $43.05 | P&L: +$0.00
+  5. AMZN     BUY  Entry: $234.37 -> Exit: $235.64 | P&L: +$0.00
+  6. AAPL     BUY  Entry: $286.23 -> Exit: $285.33 | P&L: +$0.00
+  7. INTC     BUY  Entry: $43.48 -> Exit: $43.05 | P&L: +$0.00
+  8. TSLA     BUY  Entry: $429.01 -> Exit: $425.04 | P&L: +$0.00
+  9. TSLA     BUY  Entry: $429.01 -> Exit: $425.04 | P&L: +$0.00
+  10. GOOGL    BUY  Entry: $315.70 -> Exit: $316.36 | P&L: +$0.00
+  11. NVDA     BUY  Entry: $181.36 -> Exit: $181.88 | P&L: +$0.00
+  12. AMZN     BUY  Entry: $234.37 -> Exit: $235.64 | P&L: +$0.00
+  13. GOOGL    BUY  Entry: $315.70 -> Exit: $316.36 | P&L: +$0.00
+  14. AMD      BUY  Entry: $215.18 -> Exit: $216.45 | P&L: +$0.00
+  15. GOOGL    BUY  Entry: $315.70 -> Exit: $316.36 | P&L: +$0.00
+  16. NVDA     BUY  Entry: $181.36 -> Exit: $181.88 | P&L: +$0.00
+  17. GOOGL    BUY  Entry: $315.70 -> Exit: $316.36 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-12-02
+--------------------------------------------------------------------------------
+Total Trades: 19
+Closed Trades: 19
+Win Rate: 42.1%
+Total P&L: $0.89
+Avg Profit per Trade: $0.05
+
+Trade Details:
+  1. AAPL     BUY  Entry: $284.96 -> Exit: $285.33 | P&L: +$0.00
+  2. NVDA     buy  Entry: $177.96 -> Exit: $181.84 | P&L: +$0.10
+  3. NFLX     buy  Entry: $107.76 -> Exit: $109.06 | P&L: +$0.06
+  4. MSFT     buy  Entry: $486.87 -> Exit: $490.40 | P&L: +$0.09
+  5. META     buy  Entry: $642.22 -> Exit: $646.61 | P&L: +$0.08
+  6. INTC     buy  Entry: $39.91 -> Exit: $43.05 | P&L: +$0.23
+  7. GOOGL    buy  Entry: $315.07 -> Exit: $316.34 | P&L: +$0.01
+  8. AMZN     buy  Entry: $234.25 -> Exit: $235.62 | P&L: +$0.04
+  9. AAPL     buy  Entry: $277.35 -> Exit: $285.20 | P&L: +$0.28
+  10. MSFT     BUY  Entry: $486.83 -> Exit: $488.66 | P&L: +$0.00
+  11. META     BUY  Entry: $640.91 -> Exit: $642.93 | P&L: +$0.00
+  12. META     BUY  Entry: $640.91 -> Exit: $642.93 | P&L: +$0.00
+  13. MSFT     BUY  Entry: $486.83 -> Exit: $488.66 | P&L: +$0.00
+  14. META     BUY  Entry: $640.91 -> Exit: $642.93 | P&L: +$0.00
+  15. META     BUY  Entry: $640.91 -> Exit: $642.93 | P&L: +$0.00
+  16. MSFT     BUY  Entry: $486.83 -> Exit: $488.66 | P&L: +$0.00
+  17. META     BUY  Entry: $640.91 -> Exit: $642.93 | P&L: +$0.00
+  18. MSFT     BUY  Entry: $486.83 -> Exit: $488.66 | P&L: +$0.00
+  19. MSFT     BUY  Entry: $486.83 -> Exit: $488.66 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-12-01
+--------------------------------------------------------------------------------
+Total Trades: 9
+Closed Trades: 9
+Win Rate: 11.1%
+Total P&L: $0.11
+Avg Profit per Trade: $0.01
+
+Trade Details:
+  1. META     buy  Entry: $639.35 -> Exit: $642.96 | P&L: +$0.11
+  2. AMD      BUY  Entry: $218.43 -> Exit: $218.43 | P&L: +$0.00
+  3. NFLX     BUY  Entry: $107.56 -> Exit: $107.56 | P&L: +$0.00
+  4. AAPL     BUY  Entry: $276.92 -> Exit: $276.92 | P&L: +$0.00
+  5. NVDA     BUY  Entry: $178.16 -> Exit: $178.16 | P&L: +$0.00
+  6. AMZN     BUY  Entry: $234.22 -> Exit: $234.22 | P&L: +$0.00
+  7. TSLA     BUY  Entry: $426.50 -> Exit: $426.50 | P&L: +$0.00
+  8. GOOGL    BUY  Entry: $314.97 -> Exit: $314.97 | P&L: +$0.00
+  9. INTC     BUY  Entry: $39.88 -> Exit: $39.88 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-11-28
+--------------------------------------------------------------------------------
+Total Trades: 6
+Closed Trades: 6
+Win Rate: 16.7%
+Total P&L: $0.02
+Avg Profit per Trade: $0.00
+
+Trade Details:
+  1. AMZN     BUY  Entry: $232.19 -> Exit: $235.70 | P&L: +$0.02
+  2. META     BUY  Entry: $643.72 -> Exit: $642.93 | P&L: +$0.00
+  3. MSFT     BUY  Entry: $492.00 -> Exit: $492.00 | P&L: +$0.00
+  4. INTC     BUY  Entry: $38.54 -> Exit: $39.89 | P&L: +$0.00
+  5. GOOGL    BUY  Entry: $322.73 -> Exit: $326.42 | P&L: +$0.00
+  6. NVDA     BUY  Entry: $177.93 -> Exit: $177.37 | P&L: +$0.00
+
+================================================================================
+5-DAY SUMMARY
+================================================================================
+Total Trades: 51
+Profitable Trades: 10
+Losing Trades: 41
+Overall Win Rate: 19.6%
+Total Profit/Loss: $1.02
+Average per Trade: $0.02
+
+PERFORMANCE TREND:
+✗ DECLINING - Recent performance is worse than earlier days
+
+================================================================================
