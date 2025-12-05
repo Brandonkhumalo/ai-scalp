@@ -97,38 +97,18 @@ export function TradingProvider({ children }: { children: ReactNode }) {
     if (!apiClient.isAuthenticated()) return;
 
     try {
-      // Fetch Alpaca account data for P&L calculations
+      // Fetch Alpaca account data for equity and daily P&L
       let alpacaData = null;
       try {
         alpacaData = await apiClient.get('/alpaca-account/');
         if (alpacaData) {
-          const currentEquity = alpacaData.account?.equity || 0;
-          const lastEquity = alpacaData.account?.last_equity || currentEquity;
-          
-          // Calculate total unrealized P&L from positions
-          const unrealizedPnL = alpacaData.positions?.details?.reduce(
-            (sum: number, pos: any) => sum + (pos.unrealized_pl || 0), 
-            0
-          ) || 0;
-          
-          // Fetch performance analytics to get accurate total realized P&L
-          let totalRealizedPnL = 0;
-          try {
-            const analytics = await apiClient.get('/performance-analytics/');
-            totalRealizedPnL = analytics.netPnL || 0;
-          } catch (err) {
-            console.error('Error fetching analytics:', err);
-          }
-          
-          // Total P&L = realized P&L from closed trades + unrealized P&L from open positions
-          const totalPnL = totalRealizedPnL + unrealizedPnL;
+          const currentEquity = parseFloat(alpacaData.account?.equity) || 0;
+          const lastEquity = parseFloat(alpacaData.account?.last_equity) || currentEquity;
           
           // Daily P&L = current equity - last equity (previous day's closing)
           const dailyPnL = currentEquity - lastEquity;
           
           setAlpacaEquity(currentEquity);
-          setAlpacaUnrealizedPnL(unrealizedPnL);
-          setTotalPnL(totalPnL);
           setDailyPnL(dailyPnL);
         }
       } catch (error) {
@@ -141,6 +121,23 @@ export function TradingProvider({ children }: { children: ReactNode }) {
 
       // Get ALL closed trades for display
       const allClosedTrades = tradesData.filter((t: any) => t.status === "closed");
+      
+      // Calculate realized P&L from database trades (more accurate than Alpaca activities)
+      const realizedPnLFromDb = allClosedTrades.reduce((sum: number, trade: any) => {
+        const pnl = trade.profit_loss !== undefined ? trade.profit_loss : (trade.pnl || 0);
+        return sum + (parseFloat(pnl) || 0);
+      }, 0);
+      
+      // Calculate total unrealized P&L from current Alpaca positions
+      const unrealizedPnL = alpacaData?.positions?.details?.reduce(
+        (sum: number, pos: any) => sum + (parseFloat(pos.unrealized_pl) || 0), 
+        0
+      ) || 0;
+      setAlpacaUnrealizedPnL(unrealizedPnL);
+      
+      // Total P&L = realized P&L from database + unrealized P&L from open positions
+      const calculatedTotalPnL = realizedPnLFromDb + unrealizedPnL;
+      setTotalPnL(calculatedTotalPnL);
 
       // Get 10 most recent closed trades for display (create copy to avoid mutation)
       const recentClosedTrades = [...allClosedTrades]
