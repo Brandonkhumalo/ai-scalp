@@ -924,6 +924,7 @@ class AITradingEngine:
                         'closed_count': closed_count,
                         'total_realized_profit': float(total_realized_profit),
                         'close_details': close_details,
+                        'closed_symbols': [detail['symbol'] for detail in close_details],
                         'message': f'Closed {closed_count} trades. Realized P&L: ${total_realized_profit:.2f}'
                     }
                 else:

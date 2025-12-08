@@ -5,6 +5,24 @@ ZimAI Trader is an AI-powered platform designed for automated trading on US stoc
 
 ## Recent Changes
 
+### December 8, 2025: Stock Rotation System with Sleep Mode
+**Objective:** Prevent AI from overworking - only trade each stock once until position is closed.
+
+**Key Changes:**
+1. **Stock Rotation**: AI engine maintains a list of available stocks to trade
+2. **Trade → Remove**: When a stock is traded, it's removed from the available list
+3. **Close → Add Back**: When a position is closed (scalping or manual), stock returns to list
+4. **Sleep Mode**: AI enters sleep when no stocks are available to trade
+5. **Wake Triggers**: AI wakes when positions are closed OR market session opens
+6. **Session Management**: Available stocks list resets when market session opens
+
+**Workflow:**
+- Market session opens → Initialize available stocks (exclude stocks with open positions)
+- AI analyzes available stocks → Executes trade → Removes stock from list
+- List becomes empty → AI enters sleep mode
+- Position closed (via scalping or manually) → Stock added back → AI wakes up
+- Market session closes → AI enters sleep mode and clears the list
+
 ### November 20, 2025: ML Confidence Threshold Adjustment
 **Objective:** Balance trade quality with trading volume.
 

@@ -26,12 +26,190 @@ class AutonomousAgentService:
             'active_markets': [],
             'active_users': 0,
             'last_reconciliation': None,
+            'last_market_state': {},  # Track market open/close state for session triggers
         }
         self.market_hours = MarketHoursService()
         
         # Per-user reconciliation state (prevents cross-user state pollution)
         self.user_reconciliation_state = {}  # {user_id: {reconciliation_interval, clean_passes, startup_complete, orphan_counters}}
+        
+        # STOCK ROTATION SYSTEM: Per-user available stocks and sleep mode state
+        # {user_id: {'available_stocks': set(), 'sleep_mode': bool, 'last_wake_reason': str}}
+        self.user_stock_rotation_state = {}
     
+    def _get_stock_rotation_state(self, user_id: int) -> dict:
+        """Get or initialize per-user stock rotation state"""
+        if user_id not in self.user_stock_rotation_state:
+            self.user_stock_rotation_state[user_id] = {
+                'available_stocks': set(),  # Stocks available for trading
+                'sleep_mode': True,  # Start in sleep mode until market opens
+                'last_wake_reason': None,
+                'session_initialized': False,  # Track if stocks were loaded for current session
+            }
+        return self.user_stock_rotation_state[user_id]
+    
+    def _initialize_available_stocks(self, user_id: int, market: str = 'US') -> set:
+        """
+        Initialize the available stocks list from TradableInstrument.
+        Excludes stocks that already have open positions.
+        Called when market session opens or AI is enabled.
+        """
+        state = self._get_stock_rotation_state(user_id)
+        
+        # Get all active stocks for the market
+        BLACKLISTED_SYMBOLS = ['GEV']
+        all_stocks = set(TradableInstrument.objects.filter(
+            is_active=True,
+            market=market
+        ).values_list('symbol', flat=True))
+        
+        # Fallback if no TradableInstruments configured
+        if not all_stocks:
+            all_stocks = {'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'TSLA', 'AMZN'}
+        
+        # Remove blacklisted symbols
+        all_stocks = all_stocks - set(BLACKLISTED_SYMBOLS)
+        
+        # Get symbols with open positions (exclude from available list)
+        open_position_symbols = set(Trade.objects.filter(
+            user_id=user_id,
+            status='open',
+            instrument_type='stock'
+        ).values_list('symbol', flat=True))
+        
+        # Available stocks = all stocks - stocks with open positions
+        available_stocks = all_stocks - open_position_symbols
+        
+        state['available_stocks'] = available_stocks
+        state['session_initialized'] = True
+        
+        logger.info(f"   📋 Stock Rotation: Initialized {len(available_stocks)} available stocks")
+        logger.info(f"      Total pool: {len(all_stocks)}, Open positions: {len(open_position_symbols)}")
+        
+        return available_stocks
+    
+    def _remove_stock_from_rotation(self, user_id: int, symbol: str):
+        """Remove a stock from available list after trade execution"""
+        state = self._get_stock_rotation_state(user_id)
+        
+        if symbol in state['available_stocks']:
+            state['available_stocks'].discard(symbol)
+            remaining = len(state['available_stocks'])
+            logger.info(f"   🔄 Stock Rotation: Removed {symbol} from available list ({remaining} remaining)")
+            
+            # Check if we should enter sleep mode
+            if remaining == 0:
+                state['sleep_mode'] = True
+                logger.info(f"   💤 SLEEP MODE: No stocks left to trade - AI entering sleep mode")
+    
+    def _add_stock_to_rotation(self, user_id: int, symbol: str):
+        """Add a stock back to available list when position is closed"""
+        state = self._get_stock_rotation_state(user_id)
+        
+        # Only add back if session is initialized (market is open)
+        if state['session_initialized']:
+            state['available_stocks'].add(symbol)
+            available_count = len(state['available_stocks'])
+            logger.info(f"   🔄 Stock Rotation: Added {symbol} back to available list ({available_count} available)")
+            
+            # Wake up from sleep mode if we were sleeping
+            if state['sleep_mode']:
+                state['sleep_mode'] = False
+                state['last_wake_reason'] = f'Position closed: {symbol}'
+                logger.info(f"   🌅 WAKE UP: Position closed on {symbol} - AI resuming trading")
+    
+    def _handle_market_session_change(self, user_id: int, market: str, is_now_open: bool, was_open: bool):
+        """Handle market session open/close events"""
+        state = self._get_stock_rotation_state(user_id)
+        
+        if is_now_open and not was_open:
+            # Market just opened - initialize stocks and wake up
+            logger.info(f"   🔔 SESSION OPEN: {market} market opened - Initializing stock rotation")
+            self._initialize_available_stocks(user_id, market)
+            state['sleep_mode'] = False
+            state['last_wake_reason'] = f'{market} market session opened'
+            logger.info(f"   🌅 WAKE UP: Market session started - AI active")
+            
+        elif not is_now_open and was_open:
+            # Market just closed - enter sleep mode
+            state['sleep_mode'] = True
+            state['session_initialized'] = False
+            state['available_stocks'].clear()
+            logger.info(f"   🌙 SESSION CLOSED: {market} market closed - AI entering sleep mode")
+    
+    def _is_in_sleep_mode(self, user_id: int) -> bool:
+        """Check if AI is in sleep mode for this user"""
+        state = self._get_stock_rotation_state(user_id)
+        return state['sleep_mode']
+    
+    def _get_available_stocks(self, user_id: int) -> list:
+        """Get list of available stocks for trading"""
+        state = self._get_stock_rotation_state(user_id)
+        return list(state['available_stocks'])
+    
+    def _check_manually_closed_trades(self, user_id: int):
+        """
+        Check for any closed positions and add them back to rotation if not already present.
+        Uses set-diff approach to ensure all available stocks are in rotation.
+        """
+        state = self._get_stock_rotation_state(user_id)
+        
+        if not state['session_initialized']:
+            return
+        
+        BLACKLISTED_SYMBOLS = ['GEV']
+        all_stocks = set(TradableInstrument.objects.filter(
+            is_active=True,
+            market='US'
+        ).values_list('symbol', flat=True))
+        
+        if not all_stocks:
+            all_stocks = {'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'TSLA', 'AMZN'}
+        
+        all_stocks = all_stocks - set(BLACKLISTED_SYMBOLS)
+        
+        open_position_symbols = set(Trade.objects.filter(
+            user_id=user_id,
+            status='open',
+            instrument_type='stock'
+        ).values_list('symbol', flat=True))
+        
+        should_be_available = all_stocks - open_position_symbols
+        
+        for symbol in should_be_available:
+            if symbol not in state['available_stocks']:
+                self._add_stock_to_rotation(user_id, symbol)
+    
+    def _reinitialize_if_sleep_but_stocks_available(self, user_id: int):
+        """Reinitialize rotation if in sleep mode but stocks should be available"""
+        state = self._get_stock_rotation_state(user_id)
+        
+        if not state['sleep_mode']:
+            return
+        
+        open_positions = Trade.objects.filter(
+            user_id=user_id,
+            status='open',
+            instrument_type='stock'
+        ).count()
+        
+        BLACKLISTED_SYMBOLS = ['GEV']
+        all_stocks = set(TradableInstrument.objects.filter(
+            is_active=True,
+            market='US'
+        ).values_list('symbol', flat=True))
+        
+        if not all_stocks:
+            all_stocks = {'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'TSLA', 'AMZN'}
+        
+        all_stocks_count = len(all_stocks - set(BLACKLISTED_SYMBOLS))
+        
+        if open_positions < all_stocks_count:
+            logger.info(f"   🔄 Sleep mode detected but stocks available - reinitializing")
+            self._initialize_available_stocks(user_id, 'US')
+            state['sleep_mode'] = False
+            state['last_wake_reason'] = 'Stocks became available'
+
     def run_continuous(self, check_interval: int = 60):
         self.agent_state['started_at'] = timezone.now()
         logger.info("🤖 Autonomous Trading Agent STARTED - Multi-Timezone 24/7 Operation")
@@ -63,9 +241,35 @@ class AutonomousAgentService:
         logger.info(f"⏰ Time: {market_summary['timestamp_utc']}")
         logger.info(f"📊 Open Markets: {', '.join(open_markets) if open_markets else 'None'}")
         
+        # Detect market session changes for stock rotation triggers
+        current_market_state = {market_id: status['is_open'] for market_id, status in market_summary['markets_status'].items()}
+        previous_market_state = self.agent_state.get('last_market_state', {})
+        
+        # Store market state changes for user processing
+        market_changes = {}
+        for market_id in current_market_state:
+            is_now_open = current_market_state.get(market_id, False)
+            was_open = previous_market_state.get(market_id, False)
+            if is_now_open != was_open:
+                market_changes[market_id] = {'is_now_open': is_now_open, 'was_open': was_open}
+                if is_now_open:
+                    logger.info(f"   🔔 SESSION CHANGE: {market_id} market OPENED")
+                else:
+                    logger.info(f"   🔔 SESSION CHANGE: {market_id} market CLOSED")
+        
+        # Update stored market state
+        self.agent_state['last_market_state'] = current_market_state
+        
+        # Handle market session changes for all users (even when closed)
+        if market_changes:
+            approved_users_for_changes = User.objects.filter(approval_status='approved', is_active=True)
+            for user in approved_users_for_changes:
+                for market_id, change in market_changes.items():
+                    self._handle_market_session_change(user.id, market_id, change['is_now_open'], change['was_open'])
+        
+        # Log market status but continue processing (Alpaca supports extended hours)
         if not open_markets:
-            logger.info("💤 All markets closed - Agent in standby mode")
-            return
+            logger.info("📊 Regular market hours closed - Extended hours trading may be available")
         
         for market_id, status in market_summary['markets_status'].items():
             if status['is_open']:
@@ -80,6 +284,10 @@ class AutonomousAgentService:
         
         for user in approved_users:
             try:
+                # Handle any market session changes first
+                for market_id, change in market_changes.items():
+                    self._handle_market_session_change(user.id, market_id, change['is_now_open'], change['was_open'])
+                
                 self._process_user_trading(user, open_markets)
             except Exception as e:
                 logger.error(f"❌ Error processing user {user.email}: {e}")
@@ -87,15 +295,15 @@ class AutonomousAgentService:
     def _process_user_trading(self, user, open_markets: List[str]):
         """
         Process trading for stock brokers only:
-        1. Alpaca (alpaca_sim): For users with ai_trading_enabled during US market hours
+        1. Alpaca (alpaca_sim): For users with ai_trading_enabled (supports extended hours)
         2. Capital.com Stocks: DISABLED (per user request)
         
         Note: Forex trading is MANUAL ONLY - not included in autonomous agent
         """
         trades_executed = 0
         
-        # Process Alpaca Trading (US markets only)
-        if hasattr(user, 'ai_trading_enabled') and user.ai_trading_enabled and 'US' in open_markets:
+        # Process Alpaca Trading (supports extended hours - no market gate)
+        if hasattr(user, 'ai_trading_enabled') and user.ai_trading_enabled:
             trades_executed += self._process_alpaca_trading(user)
         
         # Capital.com Stock Trading DISABLED per user request
@@ -128,42 +336,65 @@ class AutonomousAgentService:
             # Get per-user reconciliation state
             user_state = self._get_user_state(user.id)
             
+            # Get stock rotation state
+            rotation_state = self._get_stock_rotation_state(user.id)
+            
             # 🎯 SCALPING: Check and auto-close positions at profit/loss targets FIRST
             scalping_result = ai_engine.check_scalping_targets(user)
             if scalping_result.get('action') == 'scalping_auto_close':
                 logger.info(f"      🎯 Scalping: Closed {scalping_result.get('closed_count')} positions")
                 logger.info(f"         Realized P&L: ${scalping_result.get('total_realized_profit', 0):.2f}")
+                
+                # Add closed stocks back to rotation (wake up if sleeping)
+                closed_symbols = scalping_result.get('closed_symbols', [])
+                for symbol in closed_symbols:
+                    self._add_stock_to_rotation(user.id, symbol)
+            
+            # 📋 Check for manually closed trades and add them back to rotation
+            self._check_manually_closed_trades(user.id)
             
             # 🔍 RECONCILIATION: Verify database positions match Alpaca reality
             if self.agent_state['total_checks'] % user_state['reconciliation_interval'] == 0:
                 self._run_position_reconciliation(user, ai_engine, user_state)
             
+            # 💤 STOCK ROTATION SLEEP MODE CHECK
+            # Initialize stocks if session not yet initialized
+            if not rotation_state['session_initialized']:
+                logger.info(f"      📋 Initializing stock rotation for {user.email}")
+                self._initialize_available_stocks(user.id, 'US')
+                rotation_state['sleep_mode'] = False
+                rotation_state['last_wake_reason'] = 'Session initialized'
+            
+            # Check if should wake from sleep mode (stocks became available)
+            self._reinitialize_if_sleep_but_stocks_available(user.id)
+            
+            # Check if in sleep mode
+            if self._is_in_sleep_mode(user.id):
+                available_count = len(rotation_state['available_stocks'])
+                logger.info(f"      💤 SLEEP MODE: AI is sleeping (0 stocks available)")
+                logger.info(f"         Wake triggers: Position close or market session open")
+                return 0
+            
             analytics = self._get_user_analytics(user, 'alpaca_sim')
             
             if self._should_execute_trade(user, analytics, 'alpaca_sim'):
-                # *** BLACKLIST: Stocks to NEVER trade ***
-                BLACKLISTED_SYMBOLS = ['GEV']  # Add symbols here to permanently exclude from AI trading
+                # Use available stocks from rotation system (not full list)
+                available_stocks = self._get_available_stocks(user.id)
                 
-                # Use US stocks from TradableInstrument
-                us_stocks = list(TradableInstrument.objects.filter(
-                    is_active=True,
-                    market='US'
-                ).values_list('symbol', flat=True))
+                if not available_stocks:
+                    # No stocks available - enter sleep mode
+                    rotation_state['sleep_mode'] = True
+                    logger.info(f"      💤 SLEEP MODE: No stocks left in rotation - AI sleeping")
+                    return 0
                 
-                if not us_stocks:
-                    # Fallback to default US stocks if TradableInstrument is empty
-                    us_stocks = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META', 'TSLA', 'AMZN']
-                
-                # Remove blacklisted symbols from trading
-                us_stocks = [s for s in us_stocks if s not in BLACKLISTED_SYMBOLS]
-                logger.info(f"      🚫 Blacklisted symbols excluded: {BLACKLISTED_SYMBOLS}")
+                logger.info(f"      📋 Stock Rotation: {len(available_stocks)} stocks available for trading")
                 
                 # *** INTELLIGENT ML-BASED STOCK SELECTION ***
-                # Pre-screen all stocks and select best opportunity with >70% ML confidence
-                best_stock = self._select_best_stock_ml_prescreening(ai_engine, user, us_stocks)
+                # Pre-screen available stocks (not all stocks) with >70% ML confidence
+                best_stock = self._select_best_stock_ml_prescreening(ai_engine, user, available_stocks)
                 
                 if not best_stock:
-                    logger.info(f"      ⛔ No high-quality trading opportunities found (all stocks below 70% ML confidence)")
+                    logger.info(f"      ⛔ No high-quality opportunities in available stocks (try again next cycle)")
                     return 0
                 
                 symbol = best_stock['symbol']
@@ -173,6 +404,10 @@ class AutonomousAgentService:
                 
                 if result.get('success'):
                     logger.info(f"      📊 Alpaca trade: {result.get('symbol', symbol)} - Executed")
+                    
+                    # Remove traded stock from rotation
+                    self._remove_stock_from_rotation(user.id, symbol)
+                    
                     return 1
                 else:
                     # Log the failure reason so we can debug why trades aren't executing
