@@ -1031,7 +1031,8 @@ class AITradingEngine:
             # Minimum trade: 0.001 shares or $1, whichever is larger
             min_quantity = max(0.001, 1.0 / current_price)
             if quantity < min_quantity:
-                return {'success': False, 'message': 'Insufficient buying power'}
+                logger.warning(f"💰 Insufficient funds: buying_power=${user_balance:.2f}, need ${min_quantity * current_price:.2f} minimum")
+                return {'success': False, 'message': 'Insufficient buying power', 'insufficient_funds': True, 'buying_power': user_balance}
             
             # Calculate total trade cost
             trade_cost = Decimal(str(quantity)) * Decimal(str(current_price))

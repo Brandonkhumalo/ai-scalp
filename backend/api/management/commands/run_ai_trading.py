@@ -31,8 +31,54 @@ class StockRotationManager:
                 'sleep_mode': True,
                 'last_wake_reason': None,
                 'session_initialized': False,
+                'insufficient_funds_sleep': False,
+                'last_known_buying_power': 0,
             }
         return self.user_states[user_id]
+    
+    def enter_insufficient_funds_sleep(self, user_id: int, buying_power: float, stdout=None):
+        """Enter sleep mode due to insufficient funds"""
+        state = self._get_user_state(user_id)
+        state['insufficient_funds_sleep'] = True
+        state['sleep_mode'] = True
+        state['last_known_buying_power'] = buying_power
+        if stdout:
+            stdout.write(f'   💰 SLEEP MODE: Insufficient funds (buying power: ${buying_power:.2f})')
+            stdout.write(f'      Wake triggers: Position close (frees up capital)')
+    
+    def check_funds_recovery(self, user_id: int, current_buying_power: float, stdout=None) -> bool:
+        """Check if buying power has recovered enough to wake from funds sleep.
+        Wake up when buying power meets the minimum trade requirement ($1)."""
+        state = self._get_user_state(user_id)
+        
+        if not state.get('insufficient_funds_sleep'):
+            return False
+        
+        MIN_TRADE_REQUIREMENT = 1.0
+        
+        state['last_known_buying_power'] = current_buying_power
+        
+        if current_buying_power >= MIN_TRADE_REQUIREMENT:
+            state['insufficient_funds_sleep'] = False
+            state['sleep_mode'] = False
+            state['last_wake_reason'] = 'Buying power recovered'
+            if stdout:
+                stdout.write(f'   🌅 WAKE UP: Buying power recovered to ${current_buying_power:.2f} (meets $1 minimum)')
+            return True
+        return False
+    
+    def wake_from_position_close(self, user_id: int, symbol: str, stdout=None):
+        """Wake up from sleep when a position is closed (funds freed up)"""
+        state = self._get_user_state(user_id)
+        
+        if state.get('insufficient_funds_sleep'):
+            state['insufficient_funds_sleep'] = False
+            state['sleep_mode'] = False
+            state['last_wake_reason'] = f'Position closed: {symbol} (capital freed)'
+            if stdout:
+                stdout.write(f'   🌅 WAKE UP: Position {symbol} closed - capital freed')
+            return True
+        return False
     
     def initialize_available_stocks(self, user_id: int, stdout=None) -> set:
         state = self._get_user_state(user_id)
@@ -92,10 +138,15 @@ class StockRotationManager:
                 stdout.write(f'   🔄 Added {symbol} back to rotation ({available_count} available)')
             
             if state['sleep_mode']:
+                was_funds_sleep = state.get('insufficient_funds_sleep', False)
                 state['sleep_mode'] = False
+                state['insufficient_funds_sleep'] = False
                 state['last_wake_reason'] = f'Position closed: {symbol}'
                 if stdout:
-                    stdout.write(f'   🌅 WAKE UP: Position closed - AI resuming')
+                    if was_funds_sleep:
+                        stdout.write(f'   🌅 WAKE UP: Position {symbol} closed - capital freed, AI resuming')
+                    else:
+                        stdout.write(f'   🌅 WAKE UP: Position closed - AI resuming')
     
     def check_manually_closed_trades(self, user_id: int, stdout=None):
         """Check for any closed positions and add them back to rotation if not already present"""
@@ -128,10 +179,14 @@ class StockRotationManager:
                 self.add_stock_to_rotation(user_id, symbol, stdout)
     
     def reinitialize_if_sleep_but_stocks_available(self, user_id: int, stdout=None):
-        """Reinitialize rotation if in sleep mode but stocks should be available"""
+        """Reinitialize rotation if in sleep mode but stocks should be available.
+        Does NOT reinitialize if sleep is due to insufficient funds."""
         state = self._get_user_state(user_id)
         
         if not state['sleep_mode']:
+            return
+        
+        if state.get('insufficient_funds_sleep'):
             return
         
         open_positions = Trade.objects.filter(
@@ -292,9 +347,22 @@ class Command(BaseCommand):
                         
                         rotation_manager.reinitialize_if_sleep_but_stocks_available(user.id, self.stdout)
                         
+                        state = rotation_manager._get_user_state(user.id)
+                        if state.get('insufficient_funds_sleep'):
+                            account_info = engine.alpaca_account.get_account_info()
+                            if account_info:
+                                current_buying_power = float(account_info.get('buying_power', 0))
+                                rotation_manager.check_funds_recovery(user.id, current_buying_power, self.stdout)
+                        
                         if rotation_manager.is_in_sleep_mode(user.id):
-                            self.stdout.write(f'💤 {user.email}: SLEEP MODE (0 stocks available)')
-                            self.stdout.write(f'   Wake triggers: Position close or market session open')
+                            state = rotation_manager._get_user_state(user.id)
+                            if state.get('insufficient_funds_sleep'):
+                                bp = state.get('last_known_buying_power', 0)
+                                self.stdout.write(f'💰 {user.email}: SLEEP MODE (insufficient funds: ${bp:.2f})')
+                                self.stdout.write(f'   Wake triggers: Position close OR buying power >= $1.00')
+                            else:
+                                self.stdout.write(f'💤 {user.email}: SLEEP MODE (0 stocks available)')
+                                self.stdout.write(f'   Wake triggers: Position close or market session open')
                             continue
                         
                         available_stocks = rotation_manager.get_available_stocks(user.id)
@@ -329,7 +397,11 @@ class Command(BaseCommand):
                             )
                         else:
                             message = result.get('message', 'Unknown error')
-                            if 'No clear trading signal' not in message and 'Insufficient' not in message:
+                            
+                            if result.get('insufficient_funds'):
+                                buying_power = result.get('buying_power', 0)
+                                rotation_manager.enter_insufficient_funds_sleep(user.id, buying_power, self.stdout)
+                            elif 'No clear trading signal' not in message:
                                 self.stdout.write(
                                     self.style.WARNING(
                                         f'⚠️  {user.email}: {symbol} - {message}'
