@@ -222,7 +222,7 @@ def whitenoise_add_no_cache_headers(headers, path, url):
 WHITENOISE_ADD_HEADERS_FUNCTION = whitenoise_add_no_cache_headers
 
 # React build directory
-REACT_BUILD_DIR = os.path.join(BASE_DIR.parent, 'dist')
+REACT_BUILD_DIR = os.path.join(BASE_DIR, 'dist')
 
 # Serve React static files
 STATICFILES_DIRS = [
