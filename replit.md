@@ -68,7 +68,20 @@ The backend is developed with Django 5.2.7 and Django REST Framework, using Post
 **API Design:** RESTful endpoints with JWT authentication, versioned responses, CORS support, and a health check endpoint.
 
 ### Deployment Architecture
-The platform requires a reserved VM for the continuous operation of the autonomous trading agent. It utilizes `bash build-production.sh` and `bash start-production.sh` for deployment, serving static files from `dist/` (frontend) and `backend/staticfiles/` (Django). Environment variables manage sensitive configurations, and aggressive cache control mechanisms are in place. Security measures include CSRF protection, secure cookies, HSTS, XSS protection, and CORS configuration.
+The platform uses a unified Django deployment that serves both the API and React frontend from a single application on port 5000. Django serves the React build from `dist/` via WhiteNoise, eliminating the need for separate frontend deployment.
+
+**Database:** Railway PostgreSQL (configured via `RAILWAY_DATABASE_URL` environment variable). The application automatically falls back to SQLite if no Railway URL is provided.
+
+**Required Environment Variables:**
+- `DJANGO_SECRET_KEY` - Django secret key for cryptographic signing
+- `RAILWAY_DATABASE_URL` - PostgreSQL connection string for Railway database
+
+**Build & Deploy:**
+1. Build frontend: `npm run build`
+2. Collect static files: `cd backend && python manage.py collectstatic --noinput`
+3. Run server: `cd backend && python manage.py runserver 0.0.0.0:5000` (development) or use Gunicorn for production
+
+Security measures include CSRF protection, secure cookies, HSTS, XSS protection, and CORS configuration.
 
 ## External Dependencies
 
