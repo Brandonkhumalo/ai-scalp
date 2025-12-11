@@ -16,50 +16,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "AI Trading Scheduler"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Vite Frontend"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Django Backend"
-
-[[workflows.workflow]]
-name = "AI Trading Scheduler"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd backend && python manage.py run_ai_trading"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow]]
-name = "Vite Frontend"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow]]
 name = "Django Backend"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd backend && python manage.py runserver 0.0.0.0:8000"
-waitForPort = 8000
-
-[workflows.workflow.metadata]
-outputType = "console"
+args = "cd backend && python manage.py runserver 0.0.0.0:5000"
+waitForPort = 5000
 
 [[ports]]
 localPort = 5000
@@ -86,3 +55,4 @@ build = ["bash", "build-production.sh"]
 
 [userenv.shared]
 DJANGO_SECRET_KEY = "=ux_a*#4ue^6ai!#2k&@tukn=t2c=7#*w&q$)9-=*6lz=6wc%-"
+RAILWAY_DATABASE_URL = "postgresql://postgres:kQEqJROlgPFmjloeueVIZhHjZizXIloh@shinkansen.proxy.rlwy.net:18237/railway"
