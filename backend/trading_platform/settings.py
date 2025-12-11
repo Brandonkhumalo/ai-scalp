@@ -19,7 +19,6 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -40,7 +39,9 @@ if not SECRET_KEY:
 # Example: ALLOWED_HOSTS=your-app.replit.app,custom-domain.com
 allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
 if allowed_hosts_env:
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.strip()]
+    ALLOWED_HOSTS = [
+        host.strip() for host in allowed_hosts_env.split(',') if host.strip()
+    ]
 else:
     ALLOWED_HOSTS = ['*']
 # Security settings for production
@@ -61,16 +62,22 @@ else:
     # Trust Replit's proxy for HTTPS detection (prevents redirect loops)
     # Replit's proxy terminates TLS and forwards HTTP with X-Forwarded-Proto: https
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    
+
     # HTTPS security settings - ENABLED by default for production
     # Replit handles SSL termination at proxy, these settings secure cookies and headers
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'  # Keep False - Replit proxy handles this
-    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True') == 'True'  # ✅ Enabled
-    CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True') == 'True'  # ✅ Enabled
-    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))  # ✅ 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True') == 'True'  # ✅ Enabled
-    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'True') == 'True'  # ✅ Enabled
-
+    SECURE_SSL_REDIRECT = os.getenv(
+        'SECURE_SSL_REDIRECT',
+        'False') == 'True'  # Keep False - Replit proxy handles this
+    SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE',
+                                      'True') == 'True'  # ✅ Enabled
+    CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE',
+                                   'True') == 'True'  # ✅ Enabled
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS',
+                                        '31536000'))  # ✅ 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv(
+        'SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True') == 'True'  # ✅ Enabled
+    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD',
+                                    'True') == 'True'  # ✅ Enabled
 
 # Application definition
 
@@ -119,18 +126,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'trading_platform.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 import dj_database_url
 
 # Use Railway PostgreSQL database if RAILWAY_DATABASE_URL is set
-RAILWAY_DATABASE_URL = os.getenv('RAILWAY_DATABASE_URL')
+RAILWAY_DATABASE_URL = os.getenv('DATABASE_URL')
 
 if RAILWAY_DATABASE_URL:
     DATABASES = {
-        'default': dj_database_url.parse(RAILWAY_DATABASE_URL, conn_max_age=600)
+        'default': dj_database_url.parse(RAILWAY_DATABASE_URL,
+                                         conn_max_age=600)
     }
 else:
     # Fallback to SQLite for local development without Railway
@@ -141,25 +148,27 @@ else:
         }
     }
 
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'NAME':
+        'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'NAME':
+        'django.contrib.auth.password_validation.MinimumLengthValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        'NAME':
+        'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME':
+        'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -172,7 +181,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
@@ -184,6 +192,7 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 WHITENOISE_INDEX_FILE = False  # Disable index-file handling so middleware can add headers
 WHITENOISE_IMMUTABLE_FILE_TEST = lambda path, url: False  # Disable immutable files (always check for updates)
 
+
 # Custom header function for WhiteNoise to force no-cache on HTML files
 def whitenoise_add_no_cache_headers(headers, path, url):
     """
@@ -194,19 +203,21 @@ def whitenoise_add_no_cache_headers(headers, path, url):
     """
     if path.endswith('.html') or path.endswith('index.html') or url == '/':
         # Triple-layer cache prevention
-        headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0, private'
+        headers[
+            'Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0, private'
         headers['Pragma'] = 'no-cache'
         headers['Expires'] = '0'
         headers['Surrogate-Control'] = 'no-store'
-        
+
         # Prevent ETag caching
         if 'ETag' in headers:
             del headers['ETag']
     else:
         # Allow caching for JS/CSS/images (they have hashed filenames)
         headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    
+
     return headers
+
 
 WHITENOISE_ADD_HEADERS_FUNCTION = whitenoise_add_no_cache_headers
 
@@ -242,7 +253,9 @@ cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
 if cors_origins_env:
     # Explicit allowed origins (production-safe)
     CORS_ALLOW_ALL_ORIGINS = False
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',')]
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in cors_origins_env.split(',')
+    ]
     CORS_ALLOW_CREDENTIALS = True
 elif DEBUG:
     # Development only: Allow all origins
@@ -265,7 +278,9 @@ else:
 csrf_origins_env = os.getenv('CSRF_TRUSTED_ORIGINS', '')
 if csrf_origins_env:
     # Production: Use specific trusted origins from env
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins_env.split(',')]
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip() for origin in csrf_origins_env.split(',')
+    ]
 elif DEBUG:
     # Development: Trust local origins
     CSRF_TRUSTED_ORIGINS = [
@@ -286,15 +301,17 @@ else:
 # Format: ISO-8601 (YYYY-MM-DD) - parsed with timezone awareness
 from datetime import datetime, timezone
 
-ML_TRAINING_CUTOFF_DATE_STR = os.getenv('ML_TRAINING_CUTOFF_DATE', '2000-01-01')  # Changed from 2025-11-11 to include all trades
+ML_TRAINING_CUTOFF_DATE_STR = os.getenv(
+    'ML_TRAINING_CUTOFF_DATE',
+    '2000-01-01')  # Changed from 2025-11-11 to include all trades
 try:
-    ML_TRAINING_CUTOFF_DATE = datetime.fromisoformat(ML_TRAINING_CUTOFF_DATE_STR).replace(tzinfo=timezone.utc)
+    ML_TRAINING_CUTOFF_DATE = datetime.fromisoformat(
+        ML_TRAINING_CUTOFF_DATE_STR).replace(tzinfo=timezone.utc)
 except ValueError:
     import logging as _logging
     _logging.warning(
         f"Invalid ML_TRAINING_CUTOFF_DATE format: {ML_TRAINING_CUTOFF_DATE_STR}. "
-        "Using default: 2025-11-11. Expected format: YYYY-MM-DD"
-    )
+        "Using default: 2025-11-11. Expected format: YYYY-MM-DD")
     ML_TRAINING_CUTOFF_DATE = datetime(2025, 11, 11, tzinfo=timezone.utc)
 
 if not os.getenv('ML_TRAINING_CUTOFF_DATE'):
