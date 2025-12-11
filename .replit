@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.11", "web", "postgresql-16"]
+modules = ["python-3.11", "nodejs-20", "web"]
 [agent]
 expertMode = true
 
@@ -25,10 +25,6 @@ args = "Vite Frontend"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Django Backend"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Expo Mobile App"
 
 [[workflows.workflow]]
 name = "AI Trading Scheduler"
@@ -65,17 +61,6 @@ waitForPort = 8000
 [workflows.workflow.metadata]
 outputType = "console"
 
-[[workflows.workflow]]
-name = "Expo Mobile App"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd mobile && npm start"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
 [[ports]]
 localPort = 5000
 externalPort = 5000
@@ -96,3 +81,8 @@ externalPort = 80
 deploymentTarget = "vm"
 run = ["bash", "start-production.sh"]
 build = ["bash", "build-production.sh"]
+
+[userenv]
+
+[userenv.shared]
+DJANGO_SECRET_KEY = "=ux_a*#4ue^6ai!#2k&@tukn=t2c=7#*w&q$)9-=*6lz=6wc%-"
