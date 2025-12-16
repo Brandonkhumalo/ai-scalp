@@ -5,6 +5,20 @@ ZimAI Trader is an AI-powered platform designed for automated trading on US stoc
 
 ## Recent Changes
 
+### December 16, 2025: Manual ML Training Control
+**Objective:** Give user full control over when to retrain the ML model instead of automatic 24-hour retraining.
+
+**Key Changes:**
+1. **Disabled Automatic Retraining**: Removed the 24-hour automatic ML retraining from the AI trading scheduler
+2. **Manual Train ML Button**: Added "Train ML" button to the Dashboard next to the AI control buttons
+3. **Training Feedback**: Button shows accuracy percentage and trades analyzed after training completes
+
+**Workflow:**
+- User clicks "Train ML" button on Dashboard
+- System trains ML model on all closed trades
+- Toast notification shows training results (accuracy and trade count)
+- Training is now entirely user-controlled
+
 ### December 8, 2025: Stock Rotation System with Sleep Mode + Insufficient Funds Protection
 **Objective:** Prevent AI from overworking - only trade each stock once until position is closed. Also protect against insufficient funds by entering sleep mode.
 
@@ -57,7 +71,7 @@ The backend is developed with Django 5.2.7 and Django REST Framework, using Post
 
 **Core Services:**
 - **AI Trading Engine:** Executes trades based on ML predictions (≥65% confidence required) and technical indicators (RSI, MACD, Bollinger Bands). It includes advanced logic for RSI override, smart position sizing to manage concentration risk (25% max concentration), 1.5% profit target scalping, 2% stop-loss, and multi-timeframe trend detection filters (FINAL GUARD at ≥60% trend confidence) to prevent trades against strong market trends.
-- **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. It supports automatic retraining on ALL closed trades, versioned model storage, and can operate in a bootstrap mode using only technical analysis if no ML model is available. Current model version 4.1 trained on 374 trades with 90% profitable ratio.
+- **Machine Learning Service:** Employs a Random Forest classifier with 38 features, focusing on learning from loss patterns, drawdown detection, and volatility recognition. Retraining is now manual-only via the dashboard "Train ML" button (automatic 24-hour retraining has been disabled). It supports versioned model storage and can operate in a bootstrap mode using only technical analysis if no ML model is available. Current model version 4.1 trained on 374 trades with 90% profitable ratio.
 - **Market Data Service:** Gathers real-time and historical market data from Alpaca Market Data API v2 (primary) and Yahoo Finance (fallback), with thread-safe caching and rate limit handling.
 - **Alpaca Account Service:** Manages account balance and positions with intelligent caching and request deduplication.
 - **Autonomous Agent Service:** Operates 24/7 during US market hours, performing per-user reconciliation and supporting multi-timezone market hours tracking.
