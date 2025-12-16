@@ -1,0 +1,47 @@
+==> Docs on specifying a Bun version: https://render.com/docs/bun-version
+==> Using Bun version 1.3.4 (default)
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Build failed 😞
+hint: See above for details.
+note: This is an issue with the package mentioned above, not pip.
+╰─> See above for output.
+× Encountered error while generating package metadata.
+error: metadata-generation-failed
+[notice] To update, run: pip install --upgrade pip
+[notice] A new release of pip is available: 25.1.1 -> 25.3
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  
+      [end of output]
+      ninja: build stopped: subcommand failed.
+      [136/151] Compiling C object pandas/_libs/groupby.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_groupby.pyx.c.o
+      [135/151] Compiling C object pandas/_libs/hashtable.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_hashtable.pyx.c.o
+      [134/151] Compiling C object pandas/_libs/algos.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_algos.pyx.c.o
+      [133/151] Compiling C object pandas/_libs/join.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_join.pyx.c.o
+      [132/151] Compiling C object pandas/_libs/sparse.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_sparse.pyx.c.o
+      [131/151] Compiling C object pandas/_libs/interval.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_interval.pyx.c.o
+      [130/151] Compiling C object pandas/_libs/lib.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_lib.pyx.c.o
+      [129/151] Compiling C object pandas/_libs/tslibs/offsets.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_tslibs_offsets.pyx.c.o
+      [128/151] Compiling C object pandas/_libs/index.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_index.pyx.c.o
+      [127/151] Compiling C object pandas/_libs/parsers.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_parsers.pyx.c.o
+      [126/151] Compiling C object pandas/_libs/tslib.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_tslib.pyx.c.o
+      [125/151] Compiling C object pandas/_libs/writers.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_writers.pyx.c.o
+      [124/151] Compiling C object pandas/_libs/window/indexers.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_window_indexers.pyx.c.o
+      [123/151] Compiling C object pandas/_libs/sas.cpython-313-x86_64-linux-gnu.so.p/meson-generated_pandas__libs_sas.pyx.c.o
+            |        ^~~~~~~~~~~~~
+      42115 | static CYTHON_UNUSED PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues) {
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:42115:8: note: in expansion of macro ‘CYTHON_UNUSED’
+            |                               ^
+        422 |         #define CYTHON_UNUSED [[maybe_unused]]
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:422:31: note: standard attributes must precede the decl-specifiers to apply to the declaration, or follow them to apply to the type
+            |        ^~~~~~~~~~~~~
+      42115 | static CYTHON_UNUSED PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues) {
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:42115:8: note: in expansion of macro ‘CYTHON_UNUSED’
+            |                               ^
+        422 |         #define CYTHON_UNUSED [[maybe_unused]]
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:422:31: error: standard attributes in middle of decl-specifiers
+            |            ^~~~~~~~~~~~~
+       2260 |     static CYTHON_UNUSED PyObject *__Pyx_KwargsAsDict_FASTCALL(PyObject *kwnames, PyObject *const *kwvalues);
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:2260:12: note: in expansion of macro ‘CYTHON_UNUSED’
+            |                               ^
+        422 |         #define CYTHON_UNUSED [[maybe_unused]]
+      pandas/_libs/window/aggregations.cpython-313-x86_64-linux-gnu.so.p/pandas/_libs/window/aggregations.pyx.cpp:422:31: note: standard attributes must precede the decl-specifiers to apply to the declaration, or follow them to apply to the type
