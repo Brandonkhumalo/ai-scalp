@@ -1,0 +1,60 @@
+================================================================================
+TRADE COMPARISON - PAST 5 DAYS
+================================================================================
+
+Report Generated: 2025-12-16 09:21:12
+
+--------------------------------------------------------------------------------
+DATE: 2025-12-12
+--------------------------------------------------------------------------------
+Total Trades: 5
+Closed Trades: 5
+Win Rate: 0.0%
+Total P&L: $-1.36
+Avg Profit per Trade: $-0.27
+
+Trade Details:
+  1. TSLA     BUY  Entry: $458.22 -> Exit: $469.57 | P&L: +$0.00
+  2. NFLX     BUY  Entry: $96.56 -> Exit: $94.00 | P&L: $-1.36
+  3. AMD      BUY  Entry: $218.44 -> Exit: $212.52 | P&L: +$0.00
+  4. NVDA     BUY  Entry: $180.65 -> Exit: $177.86 | P&L: +$0.00
+  5. INTC     BUY  Entry: $38.65 -> Exit: $38.33 | P&L: +$0.00
+
+--------------------------------------------------------------------------------
+DATE: 2025-12-11
+--------------------------------------------------------------------------------
+Total Trades: 13
+Closed Trades: 13
+Win Rate: 15.4%
+Total P&L: $-1.36
+Avg Profit per Trade: $-0.10
+
+Trade Details:
+  1. META     BUY  Entry: $649.93 -> Exit: $649.93 | P&L: +$0.00
+  2. GOOGL    BUY  Entry: $314.71 -> Exit: $314.71 | P&L: +$0.00
+  3. NVDA     BUY  Entry: $178.19 -> Exit: $178.19 | P&L: +$0.00
+  4. INTC     BUY  Entry: $39.69 -> Exit: $39.69 | P&L: +$0.00
+  5. AMD      BUY  Entry: $213.41 -> Exit: $213.41 | P&L: +$0.00
+  6. AMD      BUY  Entry: $212.99 -> Exit: $218.52 | P&L: +$0.00
+  7. NVDA     BUY  Entry: $177.76 -> Exit: $181.08 | P&L: +$0.00
+  8. INTC     BUY  Entry: $39.53 -> Exit: $38.61 | P&L: $-1.54
+  9. AAPL     BUY  Entry: $274.64 -> Exit: $278.76 | P&L: +$0.60
+  10. NFLX     BUY  Entry: $93.62 -> Exit: $95.50 | P&L: +$0.00
+  11. GOOGL    BUY  Entry: $314.73 -> Exit: $308.38 | P&L: $-0.80
+  12. TSLA     BUY  Entry: $442.95 -> Exit: $452.62 | P&L: +$0.87
+  13. AMZN     BUY  Entry: $230.20 -> Exit: $225.46 | P&L: $-0.49
+
+================================================================================
+5-DAY SUMMARY
+================================================================================
+Total Trades: 18
+Profitable Trades: 2
+Losing Trades: 16
+Overall Win Rate: 11.1%
+Total Profit/Loss: $-2.72
+Average per Trade: $-0.15
+
+PERFORMANCE TREND:
+= STABLE - Performance is consistent
+
+================================================================================
