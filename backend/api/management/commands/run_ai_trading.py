@@ -7,7 +7,6 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from api.ai_trading_engine import AITradingEngine
-from api.ml_training_service import MLTradingModel
 from api.position_reconciliation_service import PositionReconciliationService
 from api.models import Trade, TradableInstrument
 from api.market_hours_service import MarketHoursService
@@ -271,10 +270,8 @@ class Command(BaseCommand):
             return
         
         engine = AITradingEngine(alpaca_api_key, alpaca_api_secret)
-        ml_model = MLTradingModel()
         reconciliation_service = PositionReconciliationService()
         rotation_manager = StockRotationManager()
-        last_retrain_check = {}
         market_hours = MarketHoursService()
         
         while True:
@@ -308,25 +305,27 @@ class Command(BaseCommand):
                                 )
                             )
                         
-                        user_id = str(user.id)
-                        last_training = last_retrain_check.get(user_id)
-                        closed_trades_count = Trade.objects.filter(user=user, status='closed').count()
-                        
-                        if ml_model.should_retrain(last_training, closed_trades_count):
-                            self.stdout.write(f'🧠 Retraining ML model for {user.email}...')
-                            user_trades = list(Trade.objects.filter(user=user, status='closed').order_by('-created_at'))
-                            
-                            if user_trades:
-                                retrain_result = ml_model.train(user_trades)
-                                if retrain_result.get('success'):
-                                    last_retrain_check[user_id] = datetime.now()
-                                    self.stdout.write(
-                                        self.style.SUCCESS(
-                                            f'✅ ML Model retrained for {user.email}: '
-                                            f'Accuracy={retrain_result.get("test_accuracy", 0):.2%}, '
-                                            f'Trades={retrain_result.get("trades_count", 0)}'
-                                        )
-                                    )
+                        # DISABLED: Automatic 24-hour ML retraining
+                        # ML training is now manual-only via the dashboard "Train ML" button
+                        # user_id = str(user.id)
+                        # last_training = last_retrain_check.get(user_id)
+                        # closed_trades_count = Trade.objects.filter(user=user, status='closed').count()
+                        # 
+                        # if ml_model.should_retrain(last_training, closed_trades_count):
+                        #     self.stdout.write(f'🧠 Retraining ML model for {user.email}...')
+                        #     user_trades = list(Trade.objects.filter(user=user, status='closed').order_by('-created_at'))
+                        #     
+                        #     if user_trades:
+                        #         retrain_result = ml_model.train(user_trades)
+                        #         if retrain_result.get('success'):
+                        #             last_retrain_check[user_id] = datetime.now()
+                        #             self.stdout.write(
+                        #                 self.style.SUCCESS(
+                        #                     f'✅ ML Model retrained for {user.email}: '
+                        #                     f'Accuracy={retrain_result.get("test_accuracy", 0):.2%}, '
+                        #                     f'Trades={retrain_result.get("trades_count", 0)}'
+                        #                 )
+                        #             )
                         
                         scalping_result = engine.check_scalping_targets(user)
                         if scalping_result.get('action') == 'scalping_auto_close':

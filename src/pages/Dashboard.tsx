@@ -437,6 +437,47 @@ const Dashboard = () => {
                 <TrendingUp className="h-5 w-5" />
                 Close Profits
               </Button>
+              
+              <Button 
+                variant="outline"
+                size="lg"
+                onClick={async () => {
+                  try {
+                    toast({
+                      title: "Training ML Model",
+                      description: "This may take a moment...",
+                    });
+                    
+                    const response = await apiClient.trainMLModel();
+                    
+                    if (response.success) {
+                      const accuracy = response.test_accuracy ? (response.test_accuracy * 100).toFixed(1) : 'N/A';
+                      const trades = response.trades_count || 0;
+                      toast({
+                        title: "ML Model Trained",
+                        description: `Accuracy: ${accuracy}% | Trades analyzed: ${trades}`,
+                        variant: "default",
+                      });
+                    } else {
+                      toast({
+                        title: "Training Failed",
+                        description: response.error || "Unable to train ML model",
+                        variant: "destructive",
+                      });
+                    }
+                  } catch (error: any) {
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to train ML model",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+                className="gap-2"
+              >
+                <Brain className="h-5 w-5" />
+                Train ML
+              </Button>
             </div>
           </div>
 
