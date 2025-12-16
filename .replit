@@ -56,3 +56,4 @@ build = ["bash", "build-production.sh"]
 [userenv.shared]
 DJANGO_SECRET_KEY = "=ux_a*#4ue^6ai!#2k&@tukn=t2c=7#*w&q$)9-=*6lz=6wc%-"
 RAILWAY_DATABASE_URL = "postgresql://postgres:kQEqJROlgPFmjloeueVIZhHjZizXIloh@shinkansen.proxy.rlwy.net:18237/railway"
+DEBUG = "True"

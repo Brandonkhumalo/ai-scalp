@@ -34,16 +34,8 @@ if not SECRET_KEY:
         "Generate one with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
     )
 
-# ALLOWED_HOSTS: Allow requests from any domain
-# For production, you can optionally set specific hosts via ALLOWED_HOSTS env var
-# Example: ALLOWED_HOSTS=your-app.replit.app,custom-domain.com
-allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
-if allowed_hosts_env:
-    ALLOWED_HOSTS = [
-        host.strip() for host in allowed_hosts_env.split(',') if host.strip()
-    ]
-else:
-    ALLOWED_HOSTS = ['*']
+# ALLOWED_HOSTS: Allow requests from any domain for Replit compatibility
+ALLOWED_HOSTS = ['*']
 # Security settings for production
 # These default to secure values for production deployment
 # Disabled in DEBUG mode for development servers that don't support HTTPS
@@ -221,8 +213,8 @@ def whitenoise_add_no_cache_headers(headers, path, url):
 
 WHITENOISE_ADD_HEADERS_FUNCTION = whitenoise_add_no_cache_headers
 
-# React build directory
-REACT_BUILD_DIR = os.path.join(BASE_DIR, 'dist')
+# React build directory (at project root, one level up from backend)
+REACT_BUILD_DIR = os.path.join(BASE_DIR.parent, 'dist')
 
 # Serve React static files
 STATICFILES_DIRS = [
