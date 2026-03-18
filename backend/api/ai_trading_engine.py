@@ -1,18 +1,31 @@
 import os
 import requests
 import random
+import logging
 from datetime import datetime, timedelta
+from decimal import Decimal
+
 from django.utils import timezone
+from django.db import transaction as db_transaction
+from django.contrib.auth import get_user_model
 import pytz
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+
 from .models import Trade
-from .market_data_service import MarketDataService
 from .ml_training_service import MLTradingModel
-from .alpaca_account_service import AlpacaAccountService
-import logging
+from .trade_rules import check_trade_rules
+from .technical_indicators import (
+    calculate_rsi, calculate_macd, calculate_bollinger_bands,
+    calculate_ema_trend, calculate_supertrend,
+)
+from .portfolio_service import (
+    calculate_position_size, calculate_portfolio_concentration,
+    check_position_concentration,
+)
+from .scalping_service import check_scalping_targets
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +39,9 @@ class AITradingEngine:
         self.alpaca_data_url = 'https://data.alpaca.markets'
         self.alpaca_trading_url = 'https://api.alpaca.markets'
         
-        # Initialize Alpaca account service with caching and request prioritization
-        self.alpaca_account = AlpacaAccountService()
+        # Use shared singleton for caching and request prioritization
+        from api.services import alpaca_service
+        self.alpaca_account = alpaca_service
         
     def get_alpaca_headers(self):
         return {
@@ -35,167 +49,14 @@ class AITradingEngine:
             'APCA-API-SECRET-KEY': self.alpaca_api_secret,
             'Content-Type': 'application/json',
         }
-    
-    def calculate_rsi(self, prices, period=14):
-        """Calculate Relative Strength Index"""
-        if len(prices) < period + 1:
-            return 50
-        
-        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
-        gains = [d if d > 0 else 0 for d in deltas]
-        losses = [-d if d < 0 else 0 for d in deltas]
-        
-        avg_gain = sum(gains[-period:]) / period
-        avg_loss = sum(losses[-period:]) / period
-        
-        if avg_loss == 0:
-            return 100
-        
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-    
-    def calculate_macd(self, prices, fast=12, slow=26, signal=9):
-        """Calculate MACD (Moving Average Convergence Divergence)"""
-        if len(prices) < slow + signal:
-            return 0, 0, 0
-        
-        # Calculate EMAs
-        def ema(data, period):
-            if len(data) < period:
-                return []
-            multiplier = 2 / (period + 1)
-            ema_values = [sum(data[:period]) / period]
-            for price in data[period:]:
-                ema_values.append((price - ema_values[-1]) * multiplier + ema_values[-1])
-            return ema_values
-        
-        # Calculate fast and slow EMAs
-        fast_ema_values = ema(prices, fast)
-        slow_ema_values = ema(prices, slow)
-        
-        # Align by trimming fast EMA to match slow EMA length
-        # slow EMA starts later, so we need to offset fast EMA
-        offset = slow - fast
-        aligned_fast_ema = fast_ema_values[offset:]
-        
-        # Calculate MACD line (fast - slow)
-        macd_values = [aligned_fast_ema[i] - slow_ema_values[i] for i in range(len(slow_ema_values))]
-        
-        # Calculate signal line (EMA of MACD)
-        signal_values = ema(macd_values, signal)
-        
-        if not signal_values:
-            return 0, 0, 0
-        
-        macd_line = macd_values[-1]
-        signal_line = signal_values[-1]
-        histogram = macd_line - signal_line
-        
-        return macd_line, signal_line, histogram
-    
-    def calculate_bollinger_bands(self, prices, period=20, std_dev=2):
-        """Calculate Bollinger Bands"""
-        if len(prices) < period:
-            return prices[-1], prices[-1], prices[-1]
-        
-        recent_prices = prices[-period:]
-        sma = sum(recent_prices) / period
-        variance = sum((p - sma) ** 2 for p in recent_prices) / period
-        std = variance ** 0.5
-        
-        upper_band = sma + (std_dev * std)
-        lower_band = sma - (std_dev * std)
-        
-        return upper_band, sma, lower_band
-    
-    def calculate_ema(self, prices, period):
-        """Calculate Exponential Moving Average"""
-        if len(prices) < period:
-            return None
-        
-        multiplier = 2 / (period + 1)
-        ema_values = [sum(prices[:period]) / period]
-        
-        for price in prices[period:]:
-            ema_values.append((price - ema_values[-1]) * multiplier + ema_values[-1])
-        
-        return ema_values[-1]
-    
-    def calculate_ema_trend(self, prices):
-        """
-        Calculate EMA 50/200 trend filter
-        Returns: 'uptrend', 'downtrend', or 'neutral'
-        """
-        if len(prices) < 200:
-            return 'neutral'  # Not enough data for trend detection
-        
-        ema_50 = self.calculate_ema(prices, 50)
-        ema_200 = self.calculate_ema(prices, 200)
-        
-        if ema_50 is None or ema_200 is None:
-            return 'neutral'
-        
-        # Golden cross (EMA 50 above EMA 200) = uptrend
-        if ema_50 > ema_200 * 1.01:  # 1% buffer to avoid whipsaws
-            return 'uptrend'
-        # Death cross (EMA 50 below EMA 200) = downtrend
-        elif ema_50 < ema_200 * 0.99:
-            return 'downtrend'
-        else:
-            return 'neutral'
-    
-    def calculate_supertrend(self, bars, period=10, multiplier=3):
-        """
-        Calculate SuperTrend indicator
-        Returns: 'uptrend', 'downtrend', current supertrend value
-        """
-        if len(bars) < period:
-            return 'neutral', None
-        
-        # Extract high, low, close prices
-        highs = [float(bar['h']) for bar in bars]
-        lows = [float(bar['l']) for bar in bars]
-        closes = [float(bar['c']) for bar in bars]
-        
-        # Calculate ATR (Average True Range)
-        true_ranges = []
-        for i in range(1, len(bars)):
-            tr = max(
-                highs[i] - lows[i],
-                abs(highs[i] - closes[i-1]),
-                abs(lows[i] - closes[i-1])
-            )
-            true_ranges.append(tr)
-        
-        if len(true_ranges) < period:
-            return 'neutral', None
-        
-        # Simple moving average of true range
-        atr = sum(true_ranges[-period:]) / period
-        
-        # Calculate basic upper and lower bands
-        hl_avg = (highs[-1] + lows[-1]) / 2
-        basic_upper = hl_avg + (multiplier * atr)
-        basic_lower = hl_avg - (multiplier * atr)
-        
-        # Determine trend based on close price vs bands
-        current_price = closes[-1]
-        
-        if current_price > basic_upper:
-            return 'uptrend', basic_upper
-        elif current_price < basic_lower:
-            return 'downtrend', basic_lower
-        else:
-            return 'neutral', hl_avg
-    
+
     def check_higher_timeframe_trend(self, symbol):
         """
         Check trend on higher timeframe (15 minutes) to confirm overall direction
         Returns: dict with trend info
         """
         try:
-            market_service = MarketDataService()
+            from api.services import market_data_service as market_service
             
             # Get 15-minute bars for higher timeframe analysis (400 bars = ~4 days for better EMA calculation)
             bars_15m = market_service.get_bars(symbol, timeframe='15Min', limit=400, use_fallback=True)
@@ -208,8 +69,8 @@ class AITradingEngine:
             prices_15m = [float(bar['c']) for bar in bars_15m]
             
             # Calculate trend on 15M timeframe
-            ema_trend = self.calculate_ema_trend(prices_15m)
-            supertrend, supertrend_value = self.calculate_supertrend(bars_15m)
+            ema_trend = calculate_ema_trend(prices_15m)
+            supertrend, supertrend_value = calculate_supertrend(bars_15m)
             
             # Combine both indicators for confirmation
             if ema_trend == 'uptrend' and supertrend == 'uptrend':
@@ -229,7 +90,7 @@ class AITradingEngine:
         """Analyze market sentiment using price action and volume with dual-source data"""
         try:
             # Use dual-source market data service
-            market_service = MarketDataService()
+            from api.services import market_data_service as market_service
             
             if use_training_data:
                 # For AI training, get more historical data
@@ -249,9 +110,9 @@ class AITradingEngine:
             volumes = [float(bar['v']) for bar in bars]
             
             # Calculate technical indicators
-            rsi = self.calculate_rsi(prices)
-            macd_line, signal_line, histogram = self.calculate_macd(prices)
-            upper_band, middle_band, lower_band = self.calculate_bollinger_bands(prices)
+            rsi = calculate_rsi(prices)
+            macd_line, signal_line, histogram = calculate_macd(prices)
+            upper_band, middle_band, lower_band = calculate_bollinger_bands(prices)
             
             # Calculate momentum
             momentum = (prices[-1] - prices[-5]) / prices[-5] * 100
@@ -299,49 +160,31 @@ class AITradingEngine:
             # Calculate volatility from Bollinger Bands for ML prediction
             volatility = (upper_band - lower_band) / middle_band if middle_band > 0 else 0
             
-            # ML Prediction signal with enhanced 24-feature model
+            # ML Prediction with v5.0 15-feature model
             ml_model = MLTradingModel()
             price_change = (current_price - prices[-2]) / prices[-2] if len(prices) > 1 else 0
-            
-            # Calculate side based on current signals for ML
             side_value = 1 if buy_signals > sell_signals else 0
-            
-            # Build 24-feature vector matching enhanced ML model
-            # Advanced engineered features
-            rsi_oversold = 1 if rsi < 30 else 0
-            rsi_overbought = 1 if rsi > 70 else 0
-            rsi_neutral = 1 if 40 <= rsi <= 60 else 0
-            macd_strength = abs(macd_line - signal_line)
-            macd_bullish = 1 if macd_line > signal_line else 0
+
+            # Derived features matching FEATURE_NAMES in ml_training_service.py
             bb_width = (upper_band - lower_band) / middle_band if middle_band > 0 else 0
             bb_position = ((middle_band - lower_band) / (upper_band - lower_band)) if (upper_band - lower_band) > 0 else 0.5
-            trend_strength = abs(price_change)
-            trend_direction = 1 if price_change > 0 else -1
-            high_volatility = 1 if volatility > 0.02 else 0
-            low_volatility = 1 if volatility < 0.01 else 0
-            volume_normalized = avg_volume / 1000000 if avg_volume > 0 else 0
+            volume_normalized = avg_volume / 1_000_000 if avg_volume > 0 else 0
+            macd_bullish = 1 if macd_line > signal_line else 0
             rsi_macd_alignment = 1 if (rsi < 30 and macd_bullish) or (rsi > 70 and not macd_bullish) else 0
-            volatility_volume_ratio = volatility * volume_normalized if volume_normalized > 0 else 0
-            
+            volatility_volume = bb_width * volume_normalized
+
+            # 15-feature vector (order must match FEATURE_NAMES)
             ml_features = [
-                # Original 10 features
-                rsi, macd_line, signal_line, upper_band, lower_band, middle_band,
-                avg_volume, price_change, volatility, side_value,
-                # Advanced 14 features
-                rsi_oversold, rsi_overbought, rsi_neutral,
-                macd_strength, macd_bullish,
+                rsi, macd_line, signal_line,
                 bb_width, bb_position,
-                trend_strength, trend_direction,
-                high_volatility, low_volatility,
-                volume_normalized,
-                rsi_macd_alignment, volatility_volume_ratio,
-                # Diversity features (6 features = 30 total) - use neutral defaults for prediction
-                0.5, 0.0, 0.0, 0.0, 0.0, 0.0,
-                # Loss pattern features (8 features = 38 total) - use neutral defaults for prediction
-                0, 0.0,  # is_in_drawdown, drawdown_severity
-                0, 1,    # is_volatility_spike, volatility_regime (1=medium default)
-                0, 0,    # is_high_loss_condition, recent_loss_streak
-                0, 0.0   # similar_past_losses, loss_pattern_score
+                volume_normalized, price_change, side_value,
+                rsi_macd_alignment,
+                0.5,   # portfolio_diversity (neutral default for live prediction)
+                0.0,   # portfolio_positions (neutral default)
+                0,     # recent_loss_streak (neutral default)
+                0,     # is_high_loss_condition (neutral default)
+                0.0,   # drawdown_severity (neutral default)
+                volatility_volume,
             ]
             
             ml_prediction = ml_model.predict(ml_features)
@@ -377,8 +220,8 @@ class AITradingEngine:
             
             if not use_training_data:  # Only apply in live trading, not during ML training
                 higher_tf_trend = self.check_higher_timeframe_trend(symbol)
-                ema_trend_1min = self.calculate_ema_trend(prices)
-                supertrend_1min, _ = self.calculate_supertrend(bars)
+                ema_trend_1min = calculate_ema_trend(prices)
+                supertrend_1min, _ = calculate_supertrend(bars)
                 
                 logger.info(f'{symbol} Trend Check - 15M: {higher_tf_trend["trend"]} (conf: {higher_tf_trend["confidence"]:.1%}), 1M EMA: {ema_trend_1min}, 1M SuperTrend: {supertrend_1min}')
             else:
@@ -386,80 +229,12 @@ class AITradingEngine:
                 ema_trend_1min = 'neutral'
                 supertrend_1min = 'neutral'
             
-            # *** RSI OVERRIDE: Extreme RSI values override MACD disagreement ***
-            # BUT ONLY IF NOT BLOCKED BY HIGHER TIMEFRAME TREND (FIXED!)
-            # RSI < 30 = extremely oversold (rare, high-probability reversal zone)
-            # RSI > 70 = extremely overbought (rare, high-probability reversal zone)
-            # NEW: Check higher timeframe trend FIRST to prevent buying falling knives
-            rsi_override_applied = False
-            rsi_override_blocked_by_trend = False
-            
-            if rsi < 30:
-                # Check if higher timeframe allows this BUY
-                if higher_tf_trend['confidence'] >= 0.6 and higher_tf_trend['trend'] == 'downtrend':
-                    # CRITICAL: Block execution completely - return no signal to prevent buying falling knife
-                    rsi_override_blocked_by_trend = True
-                    logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} < 30 but 15M shows strong downtrend ({higher_tf_trend["confidence"]:.1%}) - NOT buying falling knife!')
-                    return {
-                        'signal': None,
-                        'confidence': 0,
-                        'momentum': momentum,
-                        'rsi': rsi,
-                        'macd': macd_line,
-                        'macd_signal': signal_line,
-                        'macd_histogram': histogram,
-                        'bb_upper': upper_band,
-                        'bb_middle': middle_band,
-                        'bb_lower': lower_band,
-                        'volume': avg_volume,
-                        'volume_surge': volume_surge,
-                        'volatility': volatility,
-                        'current_price': current_price,
-                        'ml_prediction': ml_prediction,
-                        'trend_filter': 'BLOCKED: RSI override rejected by 15M downtrend'
-                    }
-                else:
-                    # Safe to apply RSI override
-                    buy_signals = max(buy_signals, 2)  # Ensure minimum 2 signals for execution
-                    sell_signals = 0  # Clear conflicting sell signals
-                    signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme oversold
-                    rsi_override_applied = True
-                    logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} < 30 (EXTREMELY OVERSOLD) + No strong downtrend → Forcing BUY signal')
-            
-            elif rsi > 70:
-                # Check if higher timeframe allows this SELL
-                if higher_tf_trend['confidence'] >= 0.6 and higher_tf_trend['trend'] == 'uptrend':
-                    # CRITICAL: Block execution completely - return no signal to prevent selling in strong uptrend
-                    rsi_override_blocked_by_trend = True
-                    logger.warning(f'⛔ RSI OVERRIDE BLOCKED: RSI={rsi:.1f} > 70 but 15M shows strong uptrend ({higher_tf_trend["confidence"]:.1%}) - NOT selling into uptrend!')
-                    return {
-                        'signal': None,
-                        'confidence': 0,
-                        'momentum': momentum,
-                        'rsi': rsi,
-                        'macd': macd_line,
-                        'macd_signal': signal_line,
-                        'macd_histogram': histogram,
-                        'bb_upper': upper_band,
-                        'bb_middle': middle_band,
-                        'bb_lower': lower_band,
-                        'volume': avg_volume,
-                        'volume_surge': volume_surge,
-                        'volatility': volatility,
-                        'current_price': current_price,
-                        'ml_prediction': ml_prediction,
-                        'trend_filter': 'BLOCKED: RSI override rejected by 15M uptrend'
-                    }
-                else:
-                    # Safe to apply RSI override
-                    sell_signals = max(sell_signals, 2)  # Ensure minimum 2 signals for execution
-                    buy_signals = 0  # Clear conflicting buy signals
-                    signal_strength = max(signal_strength, 60)  # Minimum confidence for extreme overbought
-                    rsi_override_applied = True
-                    logger.info(f'🚨 RSI OVERRIDE: RSI={rsi:.1f} > 70 (EXTREMELY OVERBOUGHT) + No strong uptrend → Forcing SELL signal')
-            
-            # Apply regular trend filter blocks (for non-RSI-override trades)
-            if not use_training_data and not rsi_override_applied:
+            # RSI contributes as one vote (lines 130-138 above) but does NOT override
+            # other indicators. Extreme RSI alone is not a reliable signal — in a crash,
+            # RSI stays below 30 for hours while price keeps falling.
+
+            # Apply trend filter blocks
+            if not use_training_data:
                 # Block trades if higher timeframe shows strong opposite trend
                 if higher_tf_trend['confidence'] >= 0.6:
                     if higher_tf_trend['trend'] == 'downtrend' and buy_signals > sell_signals:
@@ -496,22 +271,10 @@ class AITradingEngine:
             confidence = 0
             
             logger.info(f'{symbol}: buy_signals={buy_signals}, sell_signals={sell_signals}, signal_strength={signal_strength}, ML={ml_prediction}')
-            
-            # AI-FIRST TRADING: Allow trades based on strong ML confidence (≥65%) even with weak technical signals
-            # This enables pure ML-driven trading when technical indicators are insufficient
-            if ml_prediction['model_available'] and ml_prediction['confidence'] >= 0.65:
-                if ml_prediction['prediction'] == 1:  # ML predicts profitable trade
-                    signal = 'BUY'
-                    confidence = min(max(signal_strength, 50), 95)  # Minimum 50 confidence for ML-only trades
-                    logger.info(f'✅ ML-driven trade signal: {signal} with {ml_prediction["confidence"]:.1%} ML confidence')
-                # If ML predicts loss with ≥65% confidence, don't trade even if technical signals suggest it
-                elif ml_prediction['prediction'] == 0:
-                    signal = None
-                    logger.warning(f'⛔ ML model predicts LOSS with {ml_prediction["confidence"]:.1%} confidence - trade BLOCKED')
-            
-            # TECHNICAL SIGNAL OVERRIDE: If we have strong technical agreement (≥2 indicators), use that
-            # This allows technical analysis to override ML when signals are very clear
-            # NOTE: SHORT SELLING DISABLED - Only BUY signals allowed
+
+            # Signal decision: require 2+ technical indicators to agree (majority vote).
+            # ML prediction still contributes to signal_strength score but doesn't force trades.
+            # NOTE: SHORT SELLING DISABLED — only BUY signals allowed.
             if buy_signals > sell_signals and buy_signals >= 2:
                 signal = 'BUY'
                 confidence = min(max(signal_strength, 0), 95)
@@ -547,405 +310,13 @@ class AITradingEngine:
         except Exception as e:
             logger.error(f'Error analyzing market sentiment: {str(e)}')
             return None
-    
-    def calculate_position_size(self, account_balance, risk_per_trade=0.02):
-        """Calculate position size based on account balance and risk tolerance"""
-        return account_balance * risk_per_trade
-    
-    def calculate_portfolio_concentration(self, user):
-        """
-        Calculate portfolio concentration metrics for diversity analysis
-        
-        PRODUCTION-GRADE: Uses LIVE Alpaca positions (30s cache) to prevent ghost positions
-        from blocking trades. Falls back to DB on API failure with degraded-mode logging.
-        
-        Returns dict with concentration per symbol and diversity metrics
-        """
-        from decimal import Decimal
-        
-        # *** PRIMARY: Use Alpaca's LIVE positions (already cached 30s TTL) ***
-        # This prevents ghost positions from inflating portfolio value
-        alpaca_positions = self.alpaca_account.get_positions()
-        
-        # *** FALLBACK: Use DB if Alpaca API fails ***
-        if alpaca_positions is None or (isinstance(alpaca_positions, list) and len(alpaca_positions) == 0):
-            # Check if we have DB positions (distinguishes "no positions" from "API failure")
-            open_trades = Trade.objects.filter(user=user, status='open', instrument_type='stock')
-            
-            if not open_trades.exists():
-                # No positions anywhere - legitimate empty portfolio
-                return {
-                    'total_positions': 0,
-                    'concentration': {},
-                    'max_concentration': 0,
-                    'diversity_score': 1.0,
-                    'unique_symbols': 0,
-                    'portfolio_value': 0
-                }
-            
-            # API might be down - use DB as fallback
-            if alpaca_positions is None:
-                logger.warning('⚠️  DEGRADED MODE: Alpaca API unavailable. Using DB for concentration calculation.')
-            
-            # Fallback to DB calculation
-            portfolio_value = Decimal('0')
-            symbol_exposure = {}
-            
-            for trade in open_trades:
-                position_value = Decimal(str(trade.quantity)) * Decimal(str(trade.entry_price))
-                portfolio_value += position_value
-                
-                if trade.symbol not in symbol_exposure:
-                    symbol_exposure[trade.symbol] = Decimal('0')
-                symbol_exposure[trade.symbol] += position_value
-        else:
-            # *** PRIMARY PATH: Use Alpaca's live market values ***
-            portfolio_value = Decimal('0')
-            symbol_exposure = {}
-            
-            for position in alpaca_positions:
-                # Use current market value (more accurate than entry price)
-                position_value = Decimal(str(abs(float(position.get('market_value', 0)))))
-                portfolio_value += position_value
-                
-                symbol = position.get('symbol')
-                if symbol not in symbol_exposure:
-                    symbol_exposure[symbol] = Decimal('0')
-                symbol_exposure[symbol] += position_value
-        
-        # Calculate concentration percentages
-        concentration = {}
-        max_concentration = 0
-        
-        for symbol, value in symbol_exposure.items():
-            if portfolio_value > 0:
-                pct = float(value / portfolio_value * 100)
-                concentration[symbol] = round(pct, 2)
-                max_concentration = max(max_concentration, pct)
-        
-        # Calculate diversity score (Herfindahl index inverted)
-        hhi = sum((pct ** 2) for pct in concentration.values())
-        diversity_score = round(1 - (hhi / 10000), 3)
-        
-        return {
-            'total_positions': len(symbol_exposure),
-            'concentration': concentration,
-            'max_concentration': round(max_concentration, 2),
-            'diversity_score': diversity_score,
-            'unique_symbols': len(symbol_exposure),
-            'portfolio_value': float(portfolio_value)
-        }
-    
-    def check_position_concentration(self, user, symbol, proposed_trade_value, max_concentration_pct=25):
-        """
-        Check if adding a new position would violate concentration limits
-        
-        CRITICAL FIX: Concentration is measured against ACCOUNT EQUITY, not sum of positions.
-        This allows proper portfolio growth while maintaining risk controls.
-        
-        TEMPORARY OVERRIDE (Nov 2025): Increased from 15% to 25% to allow diversity building
-        with existing over-concentrated positions. Will reduce back to 15% once portfolio
-        diversity improves.
-        
-        Args:
-            user: User object
-            symbol: Stock symbol for the proposed trade
-            proposed_trade_value: Dollar value of the proposed trade
-            max_concentration_pct: Maximum allowed concentration in a single stock (default 25%, temp override)
-        
-        Returns:
-            dict with 'allowed': bool and 'reason': str
-        """
-        from decimal import Decimal
-        
-        # Get current portfolio state
-        portfolio = self.calculate_portfolio_concentration(user)
-        
-        # *** CRITICAL FIX: Use ACCOUNT EQUITY, not sum of positions ***
-        # Get total account equity from Alpaca
-        account_info = self.alpaca_account.get_account_info()
-        if not account_info:
-            logger.warning('⚠️  Cannot get account info for concentration check. Denying trade for safety.')
-            return {
-                'allowed': False,
-                'reason': 'Cannot verify concentration (API unavailable)',
-                'current_concentration': 0,
-                'new_concentration': 0,
-                'diversity_score': 0
-            }
-        
-        account_equity = Decimal(str(account_info.get('equity', 0)))
-        
-        # Calculate proposed position's value (existing + new)
-        current_portfolio_value = Decimal(str(portfolio.get('portfolio_value', 0)))
-        current_symbol_exposure = Decimal(str(portfolio['concentration'].get(symbol, 0))) * current_portfolio_value / 100
-        new_symbol_exposure = current_symbol_exposure + Decimal(str(proposed_trade_value))
-        
-        # Calculate new concentration percentage AGAINST ACCOUNT EQUITY
-        if account_equity > 0:
-            new_concentration_pct = float(new_symbol_exposure / account_equity * 100)
-        else:
-            new_concentration_pct = 100.0  # First trade is 100% concentrated
-        
-        # Allow first 2 positions to build initial portfolio diversity (bypass concentration check)
-        # This prevents blocking when the second position would naturally be >40% in a small portfolio
-        total_positions = portfolio.get('total_positions', 0)
-        # Only check OPEN trades when determining if symbol is new (ignore historical closed trades)
-        is_new_symbol = not Trade.objects.filter(user=user, symbol=symbol, status='open', instrument_type='stock').exists()
-        
-        # Debug logging to troubleshoot bypass logic
-        logger.info(f"🔍 Concentration check for {symbol}: total_positions={total_positions}, is_new_symbol={is_new_symbol}, bypass_allowed={total_positions < 2 and is_new_symbol}")
-        
-        if total_positions < 2 and is_new_symbol:
-            return {
-                'allowed': True,
-                'reason': f'Building initial portfolio diversity ({total_positions + 1}/2 positions)',
-                'current_concentration': portfolio['concentration'].get(symbol, 0),
-                'new_concentration': round(new_concentration_pct, 2),
-                'diversity_score': portfolio['diversity_score']
-            }
-        
-        # Check if it violates the concentration limit
-        if new_concentration_pct > max_concentration_pct:
-            return {
-                'allowed': False,
-                'reason': f'Position concentration limit exceeded: {symbol} would be {new_concentration_pct:.1f}% (max {max_concentration_pct}%)',
-                'current_concentration': portfolio['concentration'].get(symbol, 0),
-                'new_concentration': round(new_concentration_pct, 2),
-                'diversity_score': portfolio['diversity_score']
-            }
-        
-        return {
-            'allowed': True,
-            'reason': 'Within concentration limits',
-            'current_concentration': portfolio['concentration'].get(symbol, 0),
-            'new_concentration': round(new_concentration_pct, 2),
-            'diversity_score': portfolio['diversity_score']
-        }
-    
-    def check_scalping_targets(self, user):
-        """Check and auto-close positions at scalping targets (1% profit / 2% stop-loss)"""
-        from django.db import transaction as db_transaction
-        from django.utils import timezone
-        from decimal import Decimal
-        from .market_data_service import MarketDataService
-        from .models import Transaction
-        
-        try:
-            with db_transaction.atomic():
-                # Get user with lock
-                user_model = type(user)
-                user = user_model.objects.select_for_update().get(id=user.id)
-                
-                # Get all open STOCK trades only (equities-only platform)
-                open_trades = Trade.objects.select_for_update().filter(user=user, status='open', instrument_type='stock')
-                
-                if not open_trades.exists():
-                    return {'action': 'none', 'message': 'No open trades'}
-                
-                # SCALPING PARAMETERS (Adjusted for better position visibility)
-                PROFIT_TARGET = Decimal('0.015')  # 1.5% profit target per trade (scalping with staying power)
-                STOP_LOSS = Decimal('0.02')  # 2% stop-loss per trade
-                
-                market_service = MarketDataService()
-                trades_to_close = []
-                
-                # Get Alpaca positions for fallback pricing when snapshots fail (rate limiting protection)
-                alpaca_positions = self.alpaca_account.get_positions() or []
-                alpaca_price_map = {pos['symbol']: float(pos.get('current_price', 0)) for pos in alpaca_positions}
-                
-                for trade in open_trades:
-                    # USER PREFERENCE: Scalping strategy enabled - same-day closes allowed
-                    # NOTE: Alpaca may reject same-day closes due to PDT restrictions (21 day trades)
-                    # User accepts this risk and prefers immediate profit-taking control
-                    
-                    # Get current market price with fallback logic
-                    current_price = None
-                    
-                    # Try #1: Market data snapshot (most accurate)
-                    snapshot = market_service.get_realtime_snapshot(trade.symbol)
-                    if snapshot:
-                        latest_quote = snapshot.get('latestQuote', {})
-                        current_price = latest_quote.get('ap', latest_quote.get('bp'))
-                    
-                    # Try #2: Alpaca position price (fallback during rate limiting)
-                    if not current_price and trade.symbol in alpaca_price_map:
-                        current_price = alpaca_price_map[trade.symbol]
-                        logger.info(f'   Using Alpaca position price for {trade.symbol}: ${current_price}')
-                    
-                    if current_price:
-                        # Calculate current P&L and % change
-                        if trade.side.lower() == 'buy':
-                            pnl = (float(current_price) - float(trade.entry_price)) * float(trade.quantity)
-                            pct_change = (Decimal(str(current_price)) - Decimal(str(trade.entry_price))) / Decimal(str(trade.entry_price))
-                        else:
-                            pnl = (float(trade.entry_price) - float(current_price)) * float(trade.quantity)
-                            pct_change = (Decimal(str(trade.entry_price)) - Decimal(str(current_price))) / Decimal(str(trade.entry_price))
-                        
-                        # SCALPING LOGIC: Close if profit target hit OR stop-loss triggered
-                        reason = None
-                        if pct_change >= PROFIT_TARGET:
-                            reason = f'Profit Target ({float(pct_change)*100:.2f}%)'
-                            trades_to_close.append({
-                                'trade': trade,
-                                'current_price': current_price,
-                                'pnl': pnl,
-                                'pct_change': pct_change,
-                                'reason': reason
-                            })
-                        elif pct_change <= -STOP_LOSS:
-                            reason = f'Stop Loss ({float(pct_change)*100:.2f}%)'
-                            trades_to_close.append({
-                                'trade': trade,
-                                'current_price': current_price,
-                                'pnl': pnl,
-                                'pct_change': pct_change,
-                                'reason': reason
-                            })
-                
-                if trades_to_close:
-                    # Close all trades that hit targets
-                    closed_count = 0
-                    total_realized_profit = Decimal('0')
-                    close_details = []
-                    
-                    for item in trades_to_close:
-                        trade = item['trade']
-                        current_price = item['current_price']
-                        pnl = item['pnl']
-                        pct_change = item['pct_change']
-                        reason = item['reason']
-                        
-                        # *** PRODUCTION-GRADE POSITION CLOSE WITH VERIFICATION ***
-                        try:
-                            # USER PREFERENCE WARNING: Attempting same-day close (scalping mode)
-                            us_eastern = pytz.timezone('US/Eastern')
-                            trade_date_et = trade.created_at.astimezone(us_eastern).date()
-                            current_date_et = timezone.now().astimezone(us_eastern).date()
-                            
-                            if trade_date_et == current_date_et:
-                                logger.warning(f'⚠️  SCALPING MODE: Attempting same-day close for {trade.symbol}')
-                                logger.warning(f'   Trade opened: {trade.created_at.astimezone(us_eastern).strftime("%Y-%m-%d %H:%M:%S %Z")}')
-                                logger.warning(f'   Alpaca may reject due to PDT restrictions (user accepts this risk)')
-                            
-                            # Step 1: Submit close order to Alpaca
-                            # NOTE: close_position() may return None if position already closed (404)
-                            # This is OK - verification step is the source of truth!
-                            logger.info(f'📤 Submitting close order for {trade.symbol} (qty={trade.quantity})...')
-                            close_result = self.alpaca_account.close_position(trade.symbol)
-                            
-                            if close_result:
-                                logger.info(f'✅ Close order submitted for {trade.symbol}, order ID: {close_result.get("id", "unknown")}')
-                            else:
-                                logger.info(f'ℹ️  Close returned None (position may already be closed) - proceeding to verification...')
-                            
-                            # Step 2: VERIFY position actually closed (ALWAYS RUN - this is the source of truth!)
-                            # This handles ALL cases:
-                            # - Position already closed (404) → Returns True
-                            # - Position closed successfully → Returns True
-                            # - Position still exists → Returns False
-                            # - API errors / PDT rejections → Returns False
-                            logger.info(f'🔍 Verifying position {trade.symbol} is fully closed...')
-                            is_closed = self.alpaca_account.verify_position_closed(
-                                symbol=trade.symbol,
-                                max_retries=3,
-                                retry_delay=1.0  # 1s, 2s, 4s exponential backoff
-                            )
-                            
-                            if not is_closed:
-                                # Check if this is likely a PDT rejection (same-day close)
-                                if trade_date_et == current_date_et:
-                                    logger.warning(f'🚫 PDT RESTRICTION: Alpaca rejected same-day close for {trade.symbol}')
-                                    logger.warning(f'   Reason: Pattern Day Trader protection (21 day trades flagged)')
-                                    logger.warning(f'   Position remains open: {trade.symbol}, Qty: {trade.quantity}, P&L: ${pnl:.2f} ({float(pct_change)*100:.2f}%)')
-                                    logger.warning(f'   Action: Position will attempt to close on next market day')
-                                else:
-                                    logger.error(f'❌ CRITICAL: Position {trade.symbol} still exists after close attempt!')
-                                    if close_result:
-                                        logger.error(f'   Close order ID: {close_result.get("id", "unknown")}')
-                                        logger.error(f'   Close status: {close_result.get("status", "unknown")}')
-                                    logger.error(f'   Position: {trade.symbol}, Qty: {trade.quantity}, P&L: ${pnl:.2f}')
-                                    logger.error(f'   ACTION REQUIRED: Check Alpaca dashboard immediately!')
-                                continue  # Skip database update - position still open
-                            
-                            # Step 3: Success - position verified closed on Alpaca
-                            logger.info(f'✅ VERIFIED: Position {trade.symbol} successfully closed on Alpaca')
-                            logger.info(f'🎯 Scalping: {trade.symbol} (qty={trade.quantity}) - {reason}')
-                            logger.info(f'   Realized P&L: ${pnl:.2f} ({float(pct_change)*100:.2f}%)')
-                            
-                        except Exception as e:
-                            error_msg = str(e).lower()
-                            
-                            # Check if error is PDT-related
-                            if any(pdt_keyword in error_msg for pdt_keyword in ['day trading', 'pdt', 'pattern day', 'buying power']):
-                                logger.warning(f'🚫 PDT RESTRICTION: Alpaca rejected close for {trade.symbol}')
-                                logger.warning(f'   Error: {e}')
-                                logger.warning(f'   Position remains open: {trade.symbol}, Qty: {trade.quantity}, P&L: ${pnl:.2f}')
-                                logger.warning(f'   Action: Will retry on next market day')
-                            else:
-                                logger.error(f'❌ EXCEPTION closing Alpaca position {trade.symbol}: {e}')
-                                logger.error(f'   Position: {trade.symbol}, Qty: {trade.quantity}, P&L: ${pnl:.2f}')
-                                logger.error(f'   CRITICAL: Manual review required - position may be stuck!')
-                                import traceback
-                                logger.error(f'   Stack trace: {traceback.format_exc()}')
-                            continue  # Skip this trade if exception occurred
-                        
-                        # Update database record
-                        trade.exit_price = current_price
-                        trade.profit_loss = pnl
-                        trade.status = 'closed'
-                        trade.closed_at = timezone.now()
-                        trade.save()
-                        
-                        # Track P&L for statistics
-                        total_realized_profit += Decimal(str(pnl))
-                        
-                        # Create transaction
-                        Transaction.objects.create(
-                            user=user,
-                            type='trade_pnl',
-                            amount=pnl,
-                            currency='USD',
-                            reference=f'Trade #{trade.id} Auto-Closed (Scalping: {reason})',
-                            status='completed'
-                        )
-                        
-                        close_details.append({
-                            'symbol': trade.symbol,
-                            'pnl': float(pnl),
-                            'reason': reason
-                        })
-                        closed_count += 1
-                    
-                    user.save()
-                    
-                    return {
-                        'action': 'scalping_auto_close',
-                        'closed_count': closed_count,
-                        'total_realized_profit': float(total_realized_profit),
-                        'close_details': close_details,
-                        'closed_symbols': [detail['symbol'] for detail in close_details],
-                        'message': f'Closed {closed_count} trades. Realized P&L: ${total_realized_profit:.2f}'
-                    }
-                else:
-                    return {
-                        'action': 'none',
-                        'message': 'No trades hit scalping targets'
-                    }
-                    
-        except Exception as e:
-            logger.error(f'Error checking scalping targets: {str(e)}')
-            return {'action': 'error', 'message': str(e)}
-    
+
     def execute_ai_trade(self, user, symbol, instrument_type='stock'):
         """Execute an AI-driven trade based on market analysis"""
         try:
             # Check daily loss limit (8% of account balance - allows recovery trading)
-            from django.utils import timezone
             from django.db.models import Sum
-            from decimal import Decimal
-            from django.db import transaction as db_transaction
-            from django.contrib.auth import get_user_model
+            User = get_user_model()
             
             today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
             today_trades = Trade.objects.filter(
@@ -962,32 +333,14 @@ class AITradingEngine:
             if not analysis or not analysis['signal']:
                 return {'success': False, 'message': 'No clear trading signal', 'analysis': analysis}
             
-            # ML QUALITY GATE: Minimum 65% ML confidence required for high-quality trades
-            # Bootstrap Mode: Skip ML checks when user.ml_bootstrap_mode=True (allows trading with technical analysis only)
-            # NOTE: Adjusted to 65% to balance trade quality with volume
-            ml_data = analysis.get('ml_prediction', {})
-            
-            if not user.ml_bootstrap_mode:
-                # NORMAL MODE: Enforce ML model requirements
-                if not ml_data.get('model_available', False):
-                    logger.info(f"⛔ Trade rejected: ML model not available for {symbol}")
-                    return {'success': False, 'message': 'ML model not available', 'analysis': analysis}
-                
-                ml_conf = ml_data.get('confidence', 0)
-                ml_pred = ml_data.get('prediction', 0)
-                
-                # Reject if ML predicts loss
-                if ml_pred == 0:
-                    logger.warning(f"⛔ Trade rejected: ML predicts LOSS with {ml_conf:.1%} confidence for {symbol}")
-                    return {'success': False, 'message': f'ML model predicts unprofitable trade ({ml_conf:.1%} confidence)', 'analysis': analysis}
-                
-                # Reject if ML confidence below 65% (QUALITY THRESHOLD)
-                if ml_conf < 0.65:
-                    logger.info(f"⛔ Trade rejected: ML confidence {ml_conf:.1%} below 65% threshold for {symbol}")
-                    return {'success': False, 'message': f'ML confidence below 65% threshold ({ml_conf:.1%})', 'analysis': analysis}
-            else:
-                # BOOTSTRAP MODE: Trading with technical analysis only (≥2 agreeing indicators already enforced)
-                logger.info(f"🚀 BOOTSTRAP MODE: Executing trade without ML model (technical analysis only) for {symbol}")
+            # RULE ENGINE QUALITY GATE — replaces ML model for trade filtering.
+            # Explicit rules based on what the ML model's feature importance revealed:
+            # loss streaks, volatility, and daily P&L proximity to limits.
+            bb_width = analysis.get('volatility', 0)
+            rules_allowed, rules_reason = check_trade_rules(user, symbol, bb_width, analysis)
+            if not rules_allowed:
+                logger.info(f"Rule Engine blocked trade for {symbol}: {rules_reason}")
+                return {'success': False, 'message': rules_reason, 'analysis': analysis}
             
             # *** ALPACA STOCK TRADING ONLY ***
             # Get Alpaca headers for placing orders (stocks only)
@@ -1021,7 +374,7 @@ class AITradingEngine:
                 }
             
             # Calculate position size using Alpaca buying power
-            position_value = self.calculate_position_size(user_balance, risk_per_trade=0.10)
+            position_value = calculate_position_size(user_balance, risk_per_trade=0.05)
             
             # Get current price
             current_price = analysis['current_price']
@@ -1040,7 +393,7 @@ class AITradingEngine:
             # *** PORTFOLIO DIVERSITY CHECK WITH AUTO-ADJUSTMENT ***
             # Instead of blocking, reduce position size to fit within 25% limit
             max_concentration_pct = 25
-            concentration_check = self.check_position_concentration(
+            concentration_check = check_position_concentration(
                 user=user,
                 symbol=symbol,
                 proposed_trade_value=float(trade_cost),
@@ -1049,7 +402,7 @@ class AITradingEngine:
             
             if not concentration_check['allowed']:
                 # Calculate maximum allowed position value to stay at 25% concentration
-                portfolio = self.calculate_portfolio_concentration(user)
+                portfolio = calculate_portfolio_concentration(user)
                 current_symbol_exposure = Decimal(str(portfolio['concentration'].get(symbol, 0))) * Decimal(str(portfolio.get('portfolio_value', 0))) / 100
                 
                 # Max allowed total exposure = 25% of account equity
@@ -1093,7 +446,7 @@ class AITradingEngine:
                 logger.info(f'📊 Position size adjusted for {symbol}: {int(position_value / current_price)} → {quantity} shares (staying within {max_concentration_pct}% limit)')
                 
                 # Re-check concentration with adjusted quantity
-                concentration_check = self.check_position_concentration(
+                concentration_check = check_position_concentration(
                     user=user,
                     symbol=symbol,
                     proposed_trade_value=float(trade_cost),
@@ -1103,8 +456,9 @@ class AITradingEngine:
             # *** CALCULATE STOP-LOSS AND TAKE-PROFIT ***
             # For BUY orders: stop_loss below entry, take_profit above
             # For SELL orders: stop_loss above entry, take_profit below
-            stop_loss_pct = 0.02  # 2% stop-loss
-            take_profit_pct = 0.015  # 1.5% take-profit (scalping with staying power)
+            # 1:2 risk/reward ratio — risk $1 to make $2
+            stop_loss_pct = 0.01   # 1% stop-loss
+            take_profit_pct = 0.02  # 2% take-profit
             
             if analysis['signal'].lower() == 'buy':
                 stop_loss_price = round(current_price * (1 - stop_loss_pct), 2)
@@ -1115,39 +469,16 @@ class AITradingEngine:
             
             logger.info(f'Setting bracket order for {symbol}: entry=${current_price:.2f}, stop_loss=${stop_loss_price:.2f}, take_profit=${take_profit_price:.2f}')
             
-            # *** EXECUTE LIVE ORDER ON ALPACA WITH BRACKET (STOP-LOSS & TAKE-PROFIT) ***
-            # Place actual order on Alpaca paper trading account with risk management
-            alpaca_order = self.alpaca_account.place_order(
-                symbol=symbol,
-                qty=quantity,
-                side=analysis['signal'].lower(),  # 'buy' or 'sell'
-                order_type='market',
-                time_in_force='day',
-                stop_loss=stop_loss_price,
-                take_profit=take_profit_price
-            )
-            
-            if not alpaca_order:
-                logger.error(f'Failed to place Alpaca order for {symbol}')
-                return {
-                    'success': False,
-                    'message': 'Failed to place order on Alpaca. Please try again.'
-                }
-            
-            order_id = alpaca_order.get('id')
-            filled_price = alpaca_order.get('filled_avg_price', current_price)
-            order_status = alpaca_order.get('status')
-            
-            logger.info(f'Alpaca order placed: {order_id}, status={order_status}, qty={quantity}, price=${filled_price}')
-            
-            # *** SAVE TRADE TO DATABASE ***
+            # ── Step 1: Create a PENDING trade before placing the Alpaca order ──
+            # This closes the divergence window — if the process crashes after the
+            # Alpaca order but before the DB write, the pending row survives for
+            # startup reconciliation.
             with db_transaction.atomic():
-                User = get_user_model()
                 locked_user = User.objects.select_for_update().get(id=user.id)
-                
+
                 # Get portfolio diversity metrics BEFORE this trade
-                portfolio_before = self.calculate_portfolio_concentration(locked_user)
-                
+                portfolio_before = calculate_portfolio_concentration(locked_user)
+
                 # Enrich analysis with diversity metrics for ML training
                 analysis_with_diversity = {
                     **analysis,
@@ -1158,26 +489,65 @@ class AITradingEngine:
                     'symbol_concentration_before': portfolio_before['concentration'].get(symbol, 0),
                     'symbol_concentration_after': concentration_check['new_concentration']
                 }
-                
-                # Save trade to database with actual Alpaca order details
+
                 trade = Trade.objects.create(
                     user=locked_user,
                     broker='alpaca_sim',
                     symbol=symbol,
                     side=analysis['signal'],
                     quantity=quantity,
-                    entry_price=filled_price or current_price,  # Use actual filled price
+                    entry_price=current_price,  # Estimated; updated after fill
                     stop_loss=stop_loss_price,
                     take_profit=take_profit_price,
                     instrument_type=instrument_type,
-                    status='open',
+                    status='pending',
                     ai_confidence=analysis['confidence'],
                     ai_signal_type=analysis_with_diversity,
-                    broker_deal_id=order_id  # Store Alpaca order ID
                 )
-                
-                # Transaction commits here - trade saved with Alpaca order ID
-            
+
+            # ── Step 2: Place limit order at current price ──
+            # Limit orders avoid slippage (~0.05-0.3% per trade on market orders).
+            # Slight price cushion (+0.02% for buys, -0.02% for sells) ensures fill
+            # while still controlling entry price.
+            side_str = analysis['signal'].lower()
+            if side_str == 'buy':
+                limit_price = round(current_price * 1.0002, 2)  # Tiny cushion above ask
+            else:
+                limit_price = round(current_price * 0.9998, 2)  # Tiny cushion below bid
+
+            alpaca_order = self.alpaca_account.place_order(
+                symbol=symbol,
+                qty=quantity,
+                side=side_str,
+                order_type='limit',
+                time_in_force='day',
+                stop_loss=stop_loss_price,
+                take_profit=take_profit_price,
+                limit_price=limit_price,
+            )
+
+            if not alpaca_order:
+                # Order failed — mark the pending trade as failed
+                trade.status = 'failed'
+                trade.save(update_fields=['status'])
+                logger.error(f'Failed to place Alpaca order for {symbol}')
+                return {
+                    'success': False,
+                    'message': 'Failed to place order on Alpaca. Please try again.'
+                }
+
+            # ── Step 3: Promote pending → open with actual fill details ──
+            order_id = alpaca_order.get('id')
+            filled_price = alpaca_order.get('filled_avg_price', current_price)
+            order_status = alpaca_order.get('status')
+
+            logger.info(f'Alpaca order placed: {order_id}, status={order_status}, qty={quantity}, price=${filled_price}')
+
+            trade.status = 'open'
+            trade.entry_price = filled_price or current_price
+            trade.broker_deal_id = order_id
+            trade.save(update_fields=['status', 'entry_price', 'broker_deal_id'])
+
             return {
                 'success': True,
                 'trade_id': trade.id,

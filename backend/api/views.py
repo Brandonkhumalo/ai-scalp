@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from decimal import Decimal
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,11 +11,22 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from .models import Transaction, Trade, AuditLog, KYCRecord, AMLAlert, ModelRegistry
-from accounts.models import UserRole
-from .permissions import IsAdmin, IsAdminOrComplianceOfficer
-from decimal import Decimal
+from django_ratelimit.decorators import ratelimit
 from dateutil import parser
+
+from .models import (
+    Transaction, Trade, AuditLog, KYCRecord, AMLAlert,
+    ModelRegistry, TradableInstrument, AlpacaEquitySnapshot,
+)
+from .serializers import (
+    TransactionSerializer, TradeReadSerializer, AuditLogSerializer,
+    KYCRecordSerializer, AMLAlertSerializer, ModelRegistrySerializer,
+    AlpacaEquitySnapshotSerializer,
+)
+from accounts.models import UserRole
+from accounts.serializers import UserProfileSerializer
+from .permissions import IsAdmin, IsAdminOrComplianceOfficer
+from .services import alpaca_service as _alpaca_singleton, market_data_service as _market_singleton
 
 import logging
 
@@ -36,30 +50,19 @@ class HealthCheckView(APIView):
 class TransactionListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @method_decorator(ratelimit(key='user', rate='120/m', method='GET', block=True))
     def get(self, request):
         transactions = Transaction.objects.filter(user=request.user).order_by('-created_at')
-        data = [{
-            'id': t.id,
-            'type': t.type,
-            'amount': float(t.amount),
-            'currency': t.currency,
-            'payment_method': t.payment_method,
-            'reference': t.reference,
-            'status': t.status,
-            'created_at': t.created_at.isoformat(),
-        } for t in transactions]
-        return Response(data, status=status.HTTP_200_OK)
+        serializer = TransactionSerializer(transactions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class TradeListView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @method_decorator(ratelimit(key='user', rate='120/m', method='GET', block=True))
     def get(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        alpaca_service = AlpacaAccountService()
+        alpaca_service = _alpaca_singleton
         data = []
         
         # PART 1: Fetch OPEN positions from Alpaca (source of truth - no ghost positions!)
@@ -204,8 +207,6 @@ class TradeDetailView(APIView):
     permission_classes = [IsAuthenticated]
     
     def patch(self, request, trade_id):
-        from django.db import transaction as db_transaction
-        
         try:
             with db_transaction.atomic():
                 # Lock the trade row to prevent concurrent updates
@@ -230,12 +231,13 @@ class TradeDetailView(APIView):
                         trade.closed_at = timezone.now()
                 
                 if profit_loss is not None:
-                    trade.profit_loss = profit_loss
+                    trade.profit_loss = Decimal(str(profit_loss))
                 elif exit_price and trade.entry_price:
+                    exit_dec = Decimal(str(exit_price))
                     if trade.side.lower() == 'buy':
-                        trade.profit_loss = (float(exit_price) - float(trade.entry_price)) * trade.quantity
+                        trade.profit_loss = (exit_dec - trade.entry_price) * trade.quantity
                     else:
-                        trade.profit_loss = (float(trade.entry_price) - float(exit_price)) * trade.quantity
+                        trade.profit_loss = (trade.entry_price - exit_dec) * trade.quantity
                 
                 trade.save()
                 
@@ -263,8 +265,7 @@ class TradeDetailView(APIView):
                         user.usd_balance = new_balance
                         
                         # Auto-close all other open trades at current market price and apply their P&L
-                        from .market_data_service import MarketDataService
-                        market_service = MarketDataService()
+                        market_service = _market_singleton
                         open_trades = Trade.objects.filter(user=user, status='open').exclude(id=trade.id)
                         
                         for other_trade in open_trades:
@@ -277,11 +278,12 @@ class TradeDetailView(APIView):
                                     current_price = latest_quote.get('ap', latest_quote.get('bp'))
                                 
                                 if current_price:
-                                    other_trade.exit_price = current_price
+                                    price_dec = Decimal(str(current_price))
+                                    other_trade.exit_price = price_dec
                                     if other_trade.side.lower() == 'buy':
-                                        other_trade.profit_loss = (float(current_price) - float(other_trade.entry_price)) * other_trade.quantity
+                                        other_trade.profit_loss = (price_dec - other_trade.entry_price) * other_trade.quantity
                                     else:
-                                        other_trade.profit_loss = (float(other_trade.entry_price) - float(current_price)) * other_trade.quantity
+                                        other_trade.profit_loss = (other_trade.entry_price - price_dec) * other_trade.quantity
                                     other_trade.status = 'closed'
                                     other_trade.closed_at = timezone.now()
                                     other_trade.save()
@@ -308,8 +310,8 @@ class TradeDetailView(APIView):
                         
                         # If balance reaches exactly $0 or below, auto-close all remaining open trades
                         if user.usd_balance <= 0:
-                            from .market_data_service import MarketDataService
-                            market_service = MarketDataService()
+                            # MarketDataService from singleton
+                            market_service = _market_singleton
                             open_trades = Trade.objects.filter(user=user, status='open')
                             
                             for other_trade in open_trades:
@@ -366,7 +368,7 @@ class TradeDetailView(APIView):
                     action='TRADE_UPDATE',
                     resource_type='trade',
                     resource_id=str(trade.id),
-                    details={'status': trade.status, 'exit_price': str(exit_price) if exit_price else None, 'profit_loss': float(trade.profit_loss) if trade.profit_loss else None},
+                    details={'status': trade.status, 'exit_price': str(exit_price) if exit_price else None, 'profit_loss': str(trade.profit_loss) if trade.profit_loss else None},
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
                 
@@ -384,10 +386,11 @@ class TradeDetailView(APIView):
 class CheckProfitTakingView(APIView):
     """SCALPING: Close trades at 0.8-1% profit or 0.5% stop-loss (quick in/out)"""
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='30/m', method='POST', block=True))
     def post(self, request):
         from django.db import transaction as db_transaction
-        from .market_data_service import MarketDataService
+        # MarketDataService from singleton
         
         try:
             with db_transaction.atomic():
@@ -406,10 +409,11 @@ class CheckProfitTakingView(APIView):
                     })
                 
                 # SCALPING PARAMETERS
-                PROFIT_TARGET = Decimal('0.008')  # 0.8% profit target per trade
-                STOP_LOSS = Decimal('0.005')  # 0.5% stop-loss per trade
+                # 1:2 risk/reward ratio — matches scalping_service.py
+                PROFIT_TARGET = Decimal('0.02')   # 2% take-profit
+                STOP_LOSS = Decimal('0.01')       # 1% stop-loss
                 
-                market_service = MarketDataService()
+                market_service = _market_singleton
                 trades_to_close = []
                 
                 for trade in open_trades:
@@ -423,18 +427,19 @@ class CheckProfitTakingView(APIView):
                         current_price = latest_quote.get('ap', latest_quote.get('bp'))
                     
                     if current_price:
-                        # Calculate current P&L and % change
+                        # Calculate current P&L and % change using Decimal arithmetic
+                        price_dec = Decimal(str(current_price))
                         if trade.side.lower() == 'buy':
-                            pnl = (float(current_price) - float(trade.entry_price)) * trade.quantity
-                            pct_change = (Decimal(str(current_price)) - Decimal(str(trade.entry_price))) / Decimal(str(trade.entry_price))
+                            pnl = (price_dec - trade.entry_price) * trade.quantity
+                            pct_change = (price_dec - trade.entry_price) / trade.entry_price
                         else:
-                            pnl = (float(trade.entry_price) - float(current_price)) * trade.quantity
-                            pct_change = (Decimal(str(trade.entry_price)) - Decimal(str(current_price))) / Decimal(str(trade.entry_price))
+                            pnl = (trade.entry_price - price_dec) * trade.quantity
+                            pct_change = (trade.entry_price - price_dec) / trade.entry_price
                         
                         # SCALPING LOGIC: Close if profit target hit OR stop-loss triggered
                         reason = None
                         if pct_change >= PROFIT_TARGET:
-                            reason = f'Profit Target ({float(pct_change)*100:.2f}%)'
+                            reason = f'Profit Target ({pct_change * 100:.2f}%)'
                             trades_to_close.append({
                                 'trade': trade,
                                 'current_price': current_price,
@@ -442,7 +447,7 @@ class CheckProfitTakingView(APIView):
                                 'reason': reason
                             })
                         elif pct_change <= -STOP_LOSS:
-                            reason = f'Stop Loss ({float(pct_change)*100:.2f}%)'
+                            reason = f'Stop Loss ({pct_change * 100:.2f}%)'
                             trades_to_close.append({
                                 'trade': trade,
                                 'current_price': current_price,
@@ -485,7 +490,7 @@ class CheckProfitTakingView(APIView):
                         
                         close_details.append({
                             'symbol': trade.symbol,
-                            'pnl': float(pnl),
+                            'pnl': float(pnl) if pnl is not None else None,
                             'reason': reason
                         })
                         closed_count += 1
@@ -518,12 +523,11 @@ class CheckProfitTakingView(APIView):
 class CloseProfitableTradesView(APIView):
     """Close all profitable Alpaca positions via live API"""
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='30/m', method='POST', block=True))
     def post(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        
         try:
-            alpaca_service = AlpacaAccountService()
+            alpaca_service = _alpaca_singleton
             
             # Get live Alpaca positions (what the user sees on dashboard)
             positions = alpaca_service.get_positions() or []
@@ -696,51 +700,27 @@ class AuditLogListView(APIView):
     permission_classes = [IsAdminOrComplianceOfficer]
 
     def get(self, request):
-        logs = AuditLog.objects.all().order_by('-timestamp')[:100]
-        data = [{
-            'id': l.id,
-            'user_id': l.user.id if l.user else None,
-            'action': l.action,
-            'resource_type': l.resource_type,
-            'resource_id': l.resource_id,
-            'details': l.details,
-            'timestamp': l.timestamp.isoformat(),
-            'ip_address': l.ip_address,
-        } for l in logs]
-        return Response(data, status=status.HTTP_200_OK)
+        logs = AuditLog.objects.select_related('user').all().order_by('-timestamp')[:100]
+        serializer = AuditLogSerializer(logs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class KYCListView(APIView):
     permission_classes = [IsAdminOrComplianceOfficer]
 
     def get(self, request):
-        records = KYCRecord.objects.all().order_by('-created_at')
-        data = [{
-            'id': r.id,
-            'user_id': r.user.id,
-            'full_name': r.full_name,
-            'status': r.status,
-            'created_at': r.created_at.isoformat(),
-        } for r in records]
-        return Response(data, status=status.HTTP_200_OK)
+        records = KYCRecord.objects.select_related('user').all().order_by('-created_at')
+        serializer = KYCRecordSerializer(records, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class AMLAlertListView(APIView):
     permission_classes = [IsAdminOrComplianceOfficer]
 
     def get(self, request):
-        alerts = AMLAlert.objects.all().order_by('-created_at')
-        data = [{
-            'id': a.id,
-            'user_id': a.user.id,
-            'alert_type': a.alert_type,
-            'severity': a.severity,
-            'description': a.description,
-            'status': a.status,
-            'created_at': a.created_at.isoformat(),
-            'resolved_at': a.resolved_at.isoformat() if a.resolved_at else None,
-        } for a in alerts]
-        return Response(data, status=status.HTTP_200_OK)
+        alerts = AMLAlert.objects.select_related('user').all().order_by('-created_at')
+        serializer = AMLAlertSerializer(alerts, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ModelRegistryListView(APIView):
@@ -748,41 +728,26 @@ class ModelRegistryListView(APIView):
 
     def get(self, request):
         models = ModelRegistry.objects.all().order_by('-deployed_at')
-        data = [{
-            'id': m.id,
-            'name': m.name,
-            'version': m.version,
-            'model_type': m.model_type,
-            'performance_metrics': m.performance_metrics,
-            'validation_results': m.validation_results,
-            'deployed_at': m.deployed_at.isoformat(),
-            'is_active': m.is_active,
-        } for m in models]
-        return Response(data, status=status.HTTP_200_OK)
+        serializer = ModelRegistrySerializer(models, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        return Response({
-            'user_id': user.id,
-            'email': user.email,
-            'full_name': user.full_name,
-            'phone': user.phone,
-        }, status=status.HTTP_200_OK)
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class BalanceHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @method_decorator(ratelimit(key='user', rate='120/m', method='GET', block=True))
     def get(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        
         user = request.user
         history = []
-        
+
         # Get all transactions
         transactions = Transaction.objects.filter(user=user).order_by('-created_at')
         for txn in transactions:
@@ -823,7 +788,7 @@ class BalanceHistoryView(APIView):
         history.sort(key=lambda x: x['timestamp'], reverse=True)
         
         # Get current Alpaca equity for balance calculation
-        alpaca_service = AlpacaAccountService()
+        alpaca_service = _alpaca_singleton
         current_balance = float(alpaca_service.get_equity() or 100000)
         
         # Calculate running balance
@@ -918,8 +883,6 @@ class GetTradableStocksView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from .models import TradableInstrument
-        
         market = request.GET.get('market')  # Optional filter by US or EU
         
         queryset = TradableInstrument.objects.filter(is_active=True)
@@ -942,19 +905,16 @@ class GetTradableStocksView(APIView):
 class ToggleAutonomousAgentView(APIView):
     """Enable/disable the autonomous trading agent for the user"""
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='30/m', method='POST', block=True))
     def post(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        
         user = request.user
         enabled = request.data.get('enabled', False)
-        
-        logger = logging.getLogger(__name__)
-        
+
         # When disabling AI (Stop AI pressed), close ALL open Alpaca positions
         if not enabled:
             try:
-                alpaca_service = AlpacaAccountService()
+                alpaca_service = _alpaca_singleton
                 positions = alpaca_service.get_positions() or []
                 
                 if positions:
@@ -1040,12 +1000,10 @@ class ToggleAutonomousAgentView(APIView):
 class ManualAITradingView(APIView):
     """Manually trigger AI trading for a specific broker"""
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='30/m', method='POST', block=True))
     def post(self, request):
         from .ai_trading_engine import AITradingEngine
-        import logging
-        
-        logger = logging.getLogger(__name__)
         user = request.user
         broker = request.data.get('broker')
         symbol = request.data.get('symbol')
@@ -1085,9 +1043,7 @@ class AgentStatusView(APIView):
     
     def get(self, request):
         from .market_hours_service import MarketHoursService
-        import logging
-        logger = logging.getLogger(__name__)
-        
+
         logger.info(f"AgentStatusView called - User: {request.user}, Authenticated: {request.user.is_authenticated}")
         
         if not request.user.is_authenticated:
@@ -1115,12 +1071,6 @@ class AlpacaEquityHistoryView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from .models import AlpacaEquitySnapshot
-        from datetime import timedelta
-        from django.utils import timezone
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
             # Get the most recent 500 snapshots (or last 30 days), then reverse for chronological order
             # This ensures we always show the LATEST data, not the oldest
@@ -1134,19 +1084,11 @@ class AlpacaEquityHistoryView(APIView):
             # Reverse to chronological order for charting
             snapshots.reverse()
             
-            data = []
-            for snapshot in snapshots:
-                data.append({
-                    'timestamp': snapshot.timestamp.isoformat(),
-                    'equity': float(snapshot.equity),
-                    'cash': float(snapshot.cash),
-                    'unrealized_pl': float(snapshot.unrealized_pl),
-                    'daily_pl': float(getattr(snapshot, 'daily_pl', 0))
-                })
-            
+            serializer = AlpacaEquitySnapshotSerializer(snapshots, many=True)
+
             return Response({
-                'history': data,
-                'count': len(data)
+                'history': serializer.data,
+                'count': len(serializer.data)
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -1159,18 +1101,12 @@ class AlpacaEquityHistoryView(APIView):
 class AlpacaAccountView(APIView):
     """Fetch live Alpaca account data (balance, buying power, positions) with intelligent caching"""
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='120/m', method='GET', block=True))
     def get(self, request):
-        from .alpaca_account_service import AlpacaAccountService
-        from .models import AlpacaEquitySnapshot
-        from datetime import datetime
-        from decimal import Decimal
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
             # Initialize Alpaca account service (with caching)
-            alpaca_service = AlpacaAccountService()
+            alpaca_service = _alpaca_singleton
             
             # Force refresh if requested by query param
             force_refresh = request.query_params.get('force_refresh', 'false').lower() == 'true'
@@ -1219,7 +1155,6 @@ class AlpacaAccountView(APIView):
             last_snapshot = AlpacaEquitySnapshot.objects.filter(user=request.user).first()
             should_save_snapshot = True
             if last_snapshot:
-                from django.utils import timezone
                 time_diff = timezone.now() - last_snapshot.timestamp
                 # Save new snapshot if 3+ minutes have passed
                 should_save_snapshot = time_diff.total_seconds() >= 180
@@ -1269,12 +1204,12 @@ class PerformanceAnalyticsView(APIView):
     Uses Alpaca's activity API to get actual closed trades (not database records)
     """
     permission_classes = [IsAuthenticated]
-    
+
+    @method_decorator(ratelimit(key='user', rate='120/m', method='GET', block=True))
     def get(self, request):
         try:
             # Get REAL closed positions from Alpaca API (last 30 days)
-            from .alpaca_account_service import AlpacaAccountService
-            alpaca_service = AlpacaAccountService()
+            alpaca_service = _alpaca_singleton
             
             try:
                 closed_positions = alpaca_service.get_closed_positions_with_pnl(days_back=30)
@@ -1329,9 +1264,8 @@ class PerformanceAnalyticsView(APIView):
                 
                 # Calculate hold time (if available from Alpaca data)
                 if position.get('open_time') and position.get('close_time'):
-                    from dateutil import parser as date_parser
-                    open_time = date_parser.parse(position['open_time'])
-                    close_time = date_parser.parse(position['close_time'])
+                    open_time = parser.parse(position['open_time'])
+                    close_time = parser.parse(position['close_time'])
                     hold_time_hours = (close_time - open_time).total_seconds() / 3600
                     total_hold_time += hold_time_hours
             
@@ -1380,8 +1314,7 @@ class PerformanceAnalyticsView(APIView):
                 avg_hold_time_str = f"{(avg_hold_hours / 24):.1f}d"
             
             # Calculate ROI based on initial capital
-            from .alpaca_account_service import AlpacaAccountService
-            alpaca_service = AlpacaAccountService()
+            alpaca_service = _alpaca_singleton
             account_info = alpaca_service.get_account_info()
             current_equity = float(account_info.get('equity', 100000)) if account_info else 100000
             initial_capital = current_equity - net_pnl

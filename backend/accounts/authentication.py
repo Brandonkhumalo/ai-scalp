@@ -1,8 +1,10 @@
 import jwt
+import hashlib
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from datetime import datetime, timedelta
 import copy
@@ -13,6 +15,22 @@ from .models import BlacklistedToken
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+
+# Cache TTL for blacklist lookups (seconds)
+BLACKLIST_CACHE_TTL = 60
+
+
+def _blacklist_cache_key(token):
+    """Generate a short cache key from a JWT token by hashing it."""
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:32]
+    return f'blacklist:{token_hash}'
+
+
+def mark_token_blacklisted(token):
+    """Add a token to both the DB blacklist and the in-memory cache."""
+    BlacklistedToken.objects.get_or_create(token=token)
+    cache.set(_blacklist_cache_key(token), True, BLACKLIST_CACHE_TTL)
+
 
 class JWTAuthentication(BaseAuthentication):
 
@@ -65,7 +83,14 @@ class JWTAuthentication(BaseAuthentication):
 
             self.verify_token(payload, token_type='access_token')
 
-            if BlacklistedToken.objects.filter(token=token).exists():
+            # Cache-first blacklist check: avoids a DB query on every request
+            cache_key = _blacklist_cache_key(token)
+            is_blacklisted = cache.get(cache_key)
+            if is_blacklisted is None:
+                # Cache miss — fall back to DB, then cache the result
+                is_blacklisted = BlacklistedToken.objects.filter(token=token).exists()
+                cache.set(cache_key, is_blacklisted, BLACKLIST_CACHE_TTL)
+            if is_blacklisted:
                 raise AuthenticationFailed("Token has been blacklisted.")
 
             user_id = payload.get('id')

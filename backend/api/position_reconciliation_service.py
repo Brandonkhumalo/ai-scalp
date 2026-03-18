@@ -13,16 +13,15 @@ Ghost positions occur when:
 
 import logging
 from api.models import Trade
-from api.alpaca_account_service import AlpacaAccountService
-
 logger = logging.getLogger(__name__)
 
 
 class PositionReconciliationService:
     """Syncs database trades with Alpaca positions"""
-    
+
     def __init__(self):
-        self.alpaca_service = AlpacaAccountService()
+        from api.services import alpaca_service
+        self.alpaca_service = alpaca_service
     
     def reconcile_user_positions(self, user, verbose=False):
         """

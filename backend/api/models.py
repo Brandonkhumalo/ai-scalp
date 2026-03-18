@@ -47,9 +47,11 @@ class Trade(models.Model):
     ]
     
     STATUS_CHOICES = [
+        ('pending', 'Pending'),
         ('open', 'Open'),
         ('closed', 'Closed'),
         ('cancelled', 'Cancelled'),
+        ('failed', 'Failed'),
     ]
     
     BROKER_CHOICES = [
@@ -301,3 +303,30 @@ class AlpacaEquitySnapshot(models.Model):
     
     def __str__(self):
         return f"{self.user.email} - {self.timestamp.strftime('%Y-%m-%d %H:%M')} - ${self.equity}"
+
+
+class AgentState(models.Model):
+    """Persistent storage for autonomous agent state that survives process restarts."""
+    STATE_TYPE_CHOICES = [
+        ('agent_global', 'Agent Global'),
+        ('reconciliation', 'Reconciliation'),
+        ('stock_rotation', 'Stock Rotation'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='agent_states'
+    )
+    state_type = models.CharField(max_length=30, choices=STATE_TYPE_CHOICES)
+    state_data = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['user', 'state_type']]
+        indexes = [
+            models.Index(fields=['state_type']),
+        ]
+
+    def __str__(self):
+        user_label = self.user.email if self.user else 'Global'
+        return f"{user_label} - {self.state_type}"

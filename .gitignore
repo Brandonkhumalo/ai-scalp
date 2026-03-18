@@ -3,3 +3,7 @@ dist
 dist-ssr
 *.local
 backend/.env
+
+# Claude Code
+CLAUDE.md
+.claude/

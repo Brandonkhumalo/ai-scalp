@@ -319,23 +319,25 @@ class AlpacaAccountService:
         )
         return result if result else []
     
-    def place_order(self, symbol: str, qty: float, side: str, 
-                   order_type: str = 'market', time_in_force: str = 'day',
-                   stop_loss: Optional[float] = None, take_profit: Optional[float] = None) -> Optional[Dict]:
+    def place_order(self, symbol: str, qty: float, side: str,
+                   order_type: str = 'limit', time_in_force: str = 'day',
+                   stop_loss: Optional[float] = None, take_profit: Optional[float] = None,
+                   limit_price: Optional[float] = None) -> Optional[Dict]:
         """
-        Place an order on Alpaca with optional stop-loss and take-profit (bracket order)
-        
+        Place an order on Alpaca with optional stop-loss and take-profit (bracket order).
+
         Priority: CRITICAL (no caching)
-        
+
         Args:
             symbol: Stock symbol
             qty: Quantity to trade
             side: 'buy' or 'sell'
-            order_type: 'market' or 'limit'
+            order_type: 'market' or 'limit' (default: limit to avoid slippage)
             time_in_force: 'day', 'gtc', etc.
             stop_loss: Stop-loss price (for bracket orders)
             take_profit: Take-profit price (for bracket orders)
-        
+            limit_price: Limit price (required when order_type='limit')
+
         Note: Fractional orders MUST be simple orders (no bracket orders allowed by Alpaca)
         """
         url = f"{self.alpaca_trading_url}/v2/orders"
@@ -346,6 +348,10 @@ class AlpacaAccountService:
             'type': order_type,
             'time_in_force': time_in_force,
         }
+
+        # Add limit price for limit orders
+        if order_type == 'limit' and limit_price is not None:
+            payload['limit_price'] = limit_price
         
         is_fractional = qty % 1 != 0
         

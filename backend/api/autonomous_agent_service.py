@@ -9,14 +9,14 @@ from decimal import Decimal
 
 from .market_hours_service import MarketHoursService
 from .ai_trading_engine import AITradingEngine
-from .models import Trade, TradableInstrument
+from .models import Trade, TradableInstrument, AgentState
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
 class AutonomousAgentService:
-    
+
     def __init__(self):
         self.agent_state = {
             'started_at': None,
@@ -29,13 +29,84 @@ class AutonomousAgentService:
             'last_market_state': {},  # Track market open/close state for session triggers
         }
         self.market_hours = MarketHoursService()
-        
+
         # Per-user reconciliation state (prevents cross-user state pollution)
         self.user_reconciliation_state = {}  # {user_id: {reconciliation_interval, clean_passes, startup_complete, orphan_counters}}
-        
+
         # STOCK ROTATION SYSTEM: Per-user available stocks and sleep mode state
         # {user_id: {'available_stocks': set(), 'sleep_mode': bool, 'last_wake_reason': str}}
         self.user_stock_rotation_state = {}
+
+        # Restore persisted state from the database (survives process restarts)
+        self._load_state_from_db()
+
+    # ── State Persistence ────────────────────────────────────────────────
+
+    def _load_state_from_db(self):
+        """Load all persisted agent state from the database on startup."""
+        try:
+            # Global agent state
+            global_row = AgentState.objects.filter(state_type='agent_global', user=None).first()
+            if global_row and global_row.state_data:
+                saved = global_row.state_data
+                # Merge numeric counters (keep cumulative totals across restarts)
+                self.agent_state['total_checks'] = saved.get('total_checks', 0)
+                self.agent_state['total_trades_executed'] = saved.get('total_trades_executed', 0)
+                logger.info(f"   Loaded global agent state: {self.agent_state['total_checks']} checks, "
+                            f"{self.agent_state['total_trades_executed']} trades")
+
+            # Per-user reconciliation state
+            for row in AgentState.objects.filter(state_type='reconciliation').exclude(user=None):
+                self.user_reconciliation_state[row.user_id] = row.state_data
+            if self.user_reconciliation_state:
+                logger.info(f"   Loaded reconciliation state for {len(self.user_reconciliation_state)} users")
+
+            # Per-user stock rotation state (convert lists back to sets)
+            for row in AgentState.objects.filter(state_type='stock_rotation').exclude(user=None):
+                data = row.state_data.copy()
+                data['available_stocks'] = set(data.get('available_stocks', []))
+                self.user_stock_rotation_state[row.user_id] = data
+            if self.user_stock_rotation_state:
+                logger.info(f"   Loaded stock rotation state for {len(self.user_stock_rotation_state)} users")
+
+        except Exception as e:
+            logger.warning(f"Could not load persisted agent state: {e}")
+
+    def _persist_state_to_db(self):
+        """Write current agent state to the database for crash recovery."""
+        try:
+            # Global agent state (convert non-JSON-safe types)
+            state_data = {}
+            for k, v in self.agent_state.items():
+                if hasattr(v, 'isoformat'):
+                    state_data[k] = v.isoformat()
+                elif isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                    state_data[k] = v
+                else:
+                    state_data[k] = str(v)
+
+            AgentState.objects.update_or_create(
+                state_type='agent_global', user=None,
+                defaults={'state_data': state_data},
+            )
+
+            # Per-user reconciliation state
+            for user_id, data in self.user_reconciliation_state.items():
+                AgentState.objects.update_or_create(
+                    state_type='reconciliation', user_id=user_id,
+                    defaults={'state_data': data},
+                )
+
+            # Per-user stock rotation state (convert sets to lists for JSON)
+            for user_id, data in self.user_stock_rotation_state.items():
+                json_safe = data.copy()
+                json_safe['available_stocks'] = list(data.get('available_stocks', set()))
+                AgentState.objects.update_or_create(
+                    state_type='stock_rotation', user_id=user_id,
+                    defaults={'state_data': json_safe},
+                )
+        except Exception as e:
+            logger.warning(f"Could not persist agent state: {e}")
     
     def _get_stock_rotation_state(self, user_id: int) -> dict:
         """Get or initialize per-user stock rotation state"""
@@ -210,11 +281,50 @@ class AutonomousAgentService:
             state['sleep_mode'] = False
             state['last_wake_reason'] = 'Stocks became available'
 
-    def run_continuous(self, check_interval: int = 60):
+    def _reconcile_pending_trades(self):
+        """Reconcile trades left in 'pending' status from a previous crash.
+
+        For each pending trade:
+        - If it has a broker_deal_id, check Alpaca for the order status.
+        - If the order was filled, promote to 'open'.
+        - Otherwise mark as 'failed'.
+        """
+        pending_trades = Trade.objects.filter(status='pending')
+        if not pending_trades.exists():
+            return
+
+        from api.services import alpaca_service
+        logger.info(f"🔄 Startup reconciliation: found {pending_trades.count()} pending trades")
+
+        for trade in pending_trades:
+            try:
+                if trade.broker_deal_id:
+                    # Check Alpaca for matching position
+                    positions = alpaca_service.get_positions() or []
+                    symbol_on_alpaca = any(
+                        p.get('symbol') == trade.symbol for p in positions
+                    )
+                    if symbol_on_alpaca:
+                        trade.status = 'open'
+                        trade.save(update_fields=['status'])
+                        logger.info(f"   ✅ Pending trade {trade.id} ({trade.symbol}) → open (position found on Alpaca)")
+                        continue
+
+                # No matching position found — mark failed
+                trade.status = 'failed'
+                trade.save(update_fields=['status'])
+                logger.info(f"   ❌ Pending trade {trade.id} ({trade.symbol}) → failed (no Alpaca position)")
+            except Exception as e:
+                logger.error(f"   Error reconciling pending trade {trade.id}: {e}")
+
+    def run_continuous(self, check_interval: int = 15):
         self.agent_state['started_at'] = timezone.now()
         logger.info("🤖 Autonomous Trading Agent STARTED - Multi-Timezone 24/7 Operation")
         logger.info(f"   Check interval: {check_interval} seconds")
-        
+
+        # Clean up any trades left in pending status from a previous crash
+        self._reconcile_pending_trades()
+
         while True:
             try:
                 self._run_cycle()
@@ -230,6 +340,10 @@ class AutonomousAgentService:
     def _run_cycle(self):
         self.agent_state['last_check'] = timezone.now()
         self.agent_state['total_checks'] += 1
+
+        # Persist state every 20 cycles (~5 minutes at 15s interval)
+        if self.agent_state['total_checks'] % 20 == 0:
+            self._persist_state_to_db()
         
         market_summary = self.market_hours.get_market_summary()
         open_markets = market_summary['open_markets']
@@ -623,8 +737,7 @@ class AutonomousAgentService:
         - Quality-focused trading with adaptive risk management
         """
         # Get current Alpaca account equity for daily loss limit calculation
-        from .alpaca_account_service import AlpacaAccountService
-        alpaca_service = AlpacaAccountService()
+        from api.services import alpaca_service
         alpaca_equity = float(alpaca_service.get_equity() or 100000)
         
         daily_loss_limit = alpaca_equity * 0.08

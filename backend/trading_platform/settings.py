@@ -239,6 +239,18 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Cache configuration - used for token blacklist caching and rate limiting
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'zimaitrader-cache',
+        'TIMEOUT': 60,
+    }
+}
+
+# Rate limiting (django-ratelimit)
+RATELIMIT_USE_CACHE = 'default'
+
 # CORS Configuration
 # CRITICAL: CORS_ALLOW_ALL_ORIGINS with CORS_ALLOW_CREDENTIALS is a severe security risk
 # In production, explicit origins MUST be configured via CORS_ALLOWED_ORIGINS env var

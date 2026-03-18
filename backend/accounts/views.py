@@ -4,8 +4,11 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password, check_password
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from .authentication import JWTAuthentication
 from .models import BlacklistedToken, UserRole
+from .serializers import UserSerializer
 import jwt
 from django.conf import settings
 import logging
@@ -19,6 +22,7 @@ User = get_user_model()
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
+    @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
     def post(self, request):
         email = request.data.get('email', '').lower().strip()
         password = request.data.get('password')
@@ -50,27 +54,18 @@ class RegisterView(APIView):
 
         access_token = JWTAuthentication.generate_token(payload=payload)
         refresh_token = JWTAuthentication.generate_refresh_token(payload=payload)
-        
-        roles = list(user.roles.values_list('role', flat=True))
 
         return Response({
             'accessToken': access_token,
             'refreshToken': refresh_token,
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'username': user.username,
-                'full_name': user.full_name,
-                'phone': user.phone,
-                'ai_trading_enabled': user.ai_trading_enabled,
-                'roles': roles,
-            }
+            'user': UserSerializer(user).data,
         }, status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
+    @method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True))
     def post(self, request):
         email = request.data.get('email', '').lower().strip()
         password = request.data.get('password')
@@ -94,21 +89,11 @@ class LoginView(APIView):
 
         access_token = JWTAuthentication.generate_token(payload=payload)
         refresh_token = JWTAuthentication.generate_refresh_token(payload=payload)
-        
-        roles = list(user.roles.values_list('role', flat=True))
 
         return Response({
             'accessToken': access_token,
             'refreshToken': refresh_token,
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'username': user.username,
-                'full_name': user.full_name,
-                'phone': user.phone,
-                'ai_trading_enabled': user.ai_trading_enabled,
-                'roles': roles,
-            }
+            'user': UserSerializer(user).data,
         }, status=status.HTTP_200_OK)
 
 
@@ -118,13 +103,15 @@ class LogoutView(APIView):
     def post(self, request):
         token = request.auth
         if token:
-            BlacklistedToken.objects.create(token=token)  # type: ignore
+            from .authentication import mark_token_blacklisted
+            mark_token_blacklisted(token)
         return Response({'message': 'Logged out successfully'}, status=status.HTTP_200_OK)
 
 
 class RefreshTokenView(APIView):
     permission_classes = [AllowAny]
 
+    @method_decorator(ratelimit(key='ip', rate='10/m', method='POST', block=True))
     def post(self, request):
         refresh_token = request.data.get('refreshToken')
 
@@ -160,19 +147,10 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        roles = list(user.roles.values_list('role', flat=True))
-        
+        user_data = UserSerializer(request.user).data
         return Response({
-            'user': {
-                'id': user.id,
-                'email': user.email,
-                'username': user.username,
-                'full_name': user.full_name,
-                'phone': user.phone,
-                'ai_trading_enabled': user.ai_trading_enabled,
-            },
-            'roles': roles
+            'user': user_data,
+            'roles': user_data.get('roles', []),
         }, status=status.HTTP_200_OK)
 
 
@@ -182,23 +160,21 @@ class ToggleAITradingView(APIView):
 
     def post(self, request):
         from django.db import transaction as db_transaction
-        from api.alpaca_account_service import AlpacaAccountService
         import logging
-        
+
         logger = logging.getLogger(__name__)
         user = request.user
         enabled = request.data.get('enabled', False)
-        
+
         logger.info(f"Toggle AI endpoint: user={user.email}, enabled={enabled}")
-        
+
         if not enabled and user.ai_trading_enabled:
             try:
                 from api.models import Trade
+                from api.services import alpaca_service
                 from django.utils import timezone
                 from decimal import Decimal
                 import time
-                
-                alpaca_service = AlpacaAccountService()
                 
                 logger.info(f"Stopping AI for {user.email}: Canceling orders and closing positions")
                 alpaca_service.cancel_all_orders()

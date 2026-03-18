@@ -3,16 +3,42 @@ import pickle
 import logging
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# The 15 features kept in v5.0 (down from 38) — only independent, information-bearing signals.
+# Redundant binary thresholds (RSI_Oversold, High_Volatility, etc.) removed because the
+# continuous parent feature already encodes the same information and the tree can learn
+# its own splits.
+FEATURE_NAMES = [
+    'RSI',                     # Continuous 0-100 (encodes all RSI threshold info)
+    'MACD',                    # Momentum line
+    'MACD_Signal',             # Signal line (model learns crossover diff)
+    'BB_Width',                # Bollinger Band width (volatility proxy, importance 0.077)
+    'BB_Position',             # Price position in bands (0-1)
+    'Volume_Normalized',       # Normalized volume (volume/1M)
+    'Price_Change',            # Entry-time momentum (no data leakage)
+    'Side',                    # 1=BUY, 0=SELL
+    'RSI_MACD_Alignment',     # Interaction: 1 if RSI+MACD agree on direction
+    'Portfolio_Diversity',     # Herfindahl diversity score (0-1)
+    'Portfolio_Positions',     # Total open positions (normalized)
+    'Recent_Loss_Streak',     # Consecutive losses (importance 0.233 — most predictive)
+    'Is_High_Loss_Condition', # Binary: loss streak >= 2 (importance 0.079)
+    'Drawdown_Severity',      # Continuous drawdown measure (0-1)
+    'Volatility_Volume',      # Interaction: BB_Width * Volume_Normalized
+]
+
+
 class MLTradingModel:
-    """Machine Learning model for trading predictions with automatic retraining"""
-    
+    """Machine Learning model for trading predictions with automatic retraining.
+
+    v5.0 — Reduced from 38 to 15 features, raised min training trades from 5 to 50,
+    chronological train/test split, tighter regularization to reduce overfitting.
+    """
+
     def __init__(self):
         self.model = None
         self.scaler = StandardScaler()
@@ -20,10 +46,10 @@ class MLTradingModel:
         self.scaler_path = 'backend/ml_models/scaler.pkl'
         self.metrics_path = 'backend/ml_models/metrics.json'
         self.version_path = 'backend/ml_models/model_version.txt'
-        self.min_trades_for_training = 5  # Start learning with 5 trades, improve as more data comes in
+        self.min_trades_for_training = 50  # 50 trades minimum (was 5 — far too few for generalization)
         self.retrain_interval_hours = 24
-        self.expected_features = 38  # Updated to 38 features (30 + 8 advanced loss pattern features)
-        self.model_version = '4.1'  # Version 4.1 - FIXED DATA LEAKAGE: price_change now uses entry-time momentum only
+        self.expected_features = len(FEATURE_NAMES)  # 15
+        self.model_version = '5.0'  # v5.0: 15 features, chronological split, tighter regularization
         
         # Load training cutoff date from Django settings
         from django.conf import settings
@@ -36,102 +62,53 @@ class MLTradingModel:
         self.load_model()
     
     def extract_features(self, trade_data):
-        """
-        Extract enhanced features from trade data for ML training
-        Features include technical indicators, market conditions, and engineered features
+        """Extract 15 independent features from trade data.
+
+        Redundant binary indicators (RSI_Oversold, High_Volatility, etc.) were
+        removed in v5.0 because the continuous parent features already encode
+        the same information and the tree learns its own optimal thresholds.
         """
         features = []
-        
+
         for trade in trade_data:
             rsi = trade.get('rsi', 50)
             macd = trade.get('macd', 0)
             macd_signal = trade.get('macd_signal', 0)
             bb_upper = trade.get('bb_upper', 0)
             bb_lower = trade.get('bb_lower', 0)
-            bb_middle = trade.get('bb_middle', 0)
+            bb_middle = trade.get('bb_middle', 1)
             volume = trade.get('volume', 0)
             price_change = trade.get('price_change', 0)
-            volatility = trade.get('volatility', 0)
             side = 1 if trade.get('side') == 'BUY' else 0
-            
-            # Advanced engineered features for 90%+ win rate
-            # RSI-based features
-            rsi_oversold = 1 if rsi < 30 else 0  # Strong buy signal
-            rsi_overbought = 1 if rsi > 70 else 0  # Strong sell signal
-            rsi_neutral = 1 if 40 <= rsi <= 60 else 0  # Neutral zone
-            
-            # MACD strength
-            macd_strength = abs(macd - macd_signal)  # Signal strength
-            macd_bullish = 1 if macd > macd_signal else 0  # Bullish crossover
-            
-            # Bollinger Band position
+
+            # Derived (but non-redundant) features
             bb_width = (bb_upper - bb_lower) / bb_middle if bb_middle > 0 else 0
             bb_position = ((bb_middle - bb_lower) / (bb_upper - bb_lower)) if (bb_upper - bb_lower) > 0 else 0.5
-            
-            # Trend indicators
-            trend_strength = abs(price_change)  # How strong is the trend
-            trend_direction = 1 if price_change > 0 else -1  # Trend direction
-            
-            # Volatility-based risk
-            high_volatility = 1 if volatility > 0.02 else 0  # High risk
-            low_volatility = 1 if volatility < 0.01 else 0  # Low risk
-            
-            # Volume confirmation
-            volume_normalized = volume / 1000000 if volume > 0 else 0  # Normalize volume
-            
-            # Interaction features (combinations that predict success)
+            volume_normalized = volume / 1_000_000 if volume > 0 else 0
+            macd_bullish = 1 if macd > macd_signal else 0
             rsi_macd_alignment = 1 if (rsi < 30 and macd_bullish) or (rsi > 70 and not macd_bullish) else 0
-            volatility_volume_ratio = volatility * volume_normalized if volume_normalized > 0 else 0
-            
-            # Portfolio diversity features (6 features)
-            portfolio_diversity_score = trade.get('portfolio_diversity_score', 0.5)  # 0=concentrated, 1=diverse
-            portfolio_max_concentration = trade.get('portfolio_max_concentration', 0) / 100  # Normalize to 0-1
-            portfolio_unique_symbols = min(trade.get('portfolio_unique_symbols', 0) / 10, 1.0)  # Normalize (max 10)
-            portfolio_total_positions = min(trade.get('portfolio_total_positions', 0) / 20, 1.0)  # Normalize (max 20)
-            symbol_concentration_before = trade.get('symbol_concentration_before', 0) / 100  # Normalize to 0-1
-            symbol_concentration_after = trade.get('symbol_concentration_after', 0) / 100  # Normalize to 0-1
-            
-            # Advanced loss pattern features (8 features) - Learn from drawdown, volatility spikes, and losing patterns
-            # Drawdown zone detection (2 features)
-            is_in_drawdown = 1 if trade.get('max_drawdown_pct', 0) > 5 else 0  # In significant drawdown (>5%)
-            drawdown_severity = min(trade.get('max_drawdown_pct', 0) / 20, 1.0)  # Normalize drawdown (cap at 20%)
-            
-            # Volatility spike detection (2 features)
-            is_volatility_spike = 1 if volatility > 0.03 else 0  # Extreme volatility (>3%)
-            volatility_regime = 2 if volatility > 0.03 else (1 if volatility > 0.015 else 0)  # 0=low, 1=medium, 2=high
-            
-            # High-loss condition detection (2 features)
-            recent_loss_streak = trade.get('recent_loss_streak', 0)  # Number of recent consecutive losses
-            is_high_loss_condition = 1 if recent_loss_streak >= 2 else 0  # 2+ losses in a row = high risk
-            
-            # Past losing pattern similarity (2 features)
-            similar_past_losses = trade.get('similar_past_losses', 0)  # Count of similar losing trades
-            loss_pattern_score = min(similar_past_losses / 5, 1.0)  # Normalize (0-1, cap at 5 similar losses)
-            
+            volatility_volume = bb_width * volume_normalized
+
+            # Portfolio context
+            portfolio_diversity = trade.get('portfolio_diversity_score', 0.5)
+            portfolio_positions = min(trade.get('portfolio_total_positions', 0) / 20, 1.0)
+
+            # Loss pattern features (most predictive group per feature importance analysis)
+            recent_loss_streak = trade.get('recent_loss_streak', 0)
+            is_high_loss_condition = 1 if recent_loss_streak >= 2 else 0
+            drawdown_severity = min(trade.get('max_drawdown_pct', 0) / 20, 1.0)
+
             feature_vector = [
-                # Original features (10)
-                rsi, macd, macd_signal, bb_upper, bb_lower, bb_middle, 
-                volume, price_change, volatility, side,
-                # Advanced features (14 = 24 total)
-                rsi_oversold, rsi_overbought, rsi_neutral,
-                macd_strength, macd_bullish,
+                rsi, macd, macd_signal,
                 bb_width, bb_position,
-                trend_strength, trend_direction,
-                high_volatility, low_volatility,
-                volume_normalized,
-                rsi_macd_alignment, volatility_volume_ratio,
-                # Diversity features (6 = 30 total)
-                portfolio_diversity_score, portfolio_max_concentration,
-                portfolio_unique_symbols, portfolio_total_positions,
-                symbol_concentration_before, symbol_concentration_after,
-                # Loss pattern learning features (8 = 38 total)
-                is_in_drawdown, drawdown_severity,
-                is_volatility_spike, volatility_regime,
-                is_high_loss_condition, recent_loss_streak,
-                similar_past_losses, loss_pattern_score
+                volume_normalized, price_change, side,
+                rsi_macd_alignment,
+                portfolio_diversity, portfolio_positions,
+                recent_loss_streak, is_high_loss_condition,
+                drawdown_severity, volatility_volume,
             ]
             features.append(feature_vector)
-        
+
         return np.array(features)
     
     def extract_labels(self, trade_data):
@@ -305,99 +282,83 @@ class MLTradingModel:
         return X, y
     
     def train(self, trades):
-        """Train the ML model on historical trades"""
-        logger.info(f'Starting ML model training with {len(trades)} trades')
-        
-        # TEMPORARILY DISABLED: Cutoff filter removed to include losing trades for proper ML training
-        # The 11 losing trades were excluded by the Nov 11 cutoff, causing 100% profitable training data
-        # trades = self._filter_trades_by_cutoff(trades)
-        logger.info('Using ALL closed trades (cutoff filter disabled to include losing trades)')
-        
+        """Train the ML model on historical trades."""
+        logger.info(f'Starting ML model v{self.model_version} training with {len(trades)} trades')
+
         X, y = self.prepare_training_data(trades)
-        
+
         if X is None or len(X) < self.min_trades_for_training:
-            logger.error('Cannot train: insufficient data')
+            logger.error(f'Cannot train: need {self.min_trades_for_training} closed trades, got {len(X) if X is not None else 0}')
             return {
                 'success': False,
-                'error': f'Need at least {self.min_trades_for_training} closed trades for training',
-                'trades_count': len(trades) if trades else 0
+                'error': f'Need at least {self.min_trades_for_training} closed trades for training (bootstrap mode uses technical analysis until then)',
+                'trades_count': len(trades) if trades else 0,
             }
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-        
+
+        # Chronological split — model never sees future trades during training.
+        # This is correct for time-series data (unlike random_state=42 split).
+        split_idx = int(len(X) * 0.8)
+        X_train, X_test = X[:split_idx], X[split_idx:]
+        y_train, y_test = y[:split_idx], y[split_idx:]
+
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
-        
-        # Train enhanced Random Forest model with optimized hyperparameters for 90%+ win rate
+
+        # Tighter regularization for 15-feature model (prevents memorization)
         self.model = RandomForestClassifier(
-            n_estimators=200,  # Increased from 100 for better ensemble
-            max_depth=15,  # Increased from 10 for more complex patterns
-            min_samples_split=3,  # More strict splitting for quality
-            min_samples_leaf=2,  # Prevent overfitting on single samples
-            max_features='sqrt',  # Use sqrt of features for diversity
+            n_estimators=100,        # 100 trees (fewer features need fewer trees)
+            max_depth=8,             # Shallower trees prevent memorization
+            min_samples_split=5,     # Require more evidence before splitting
+            min_samples_leaf=3,      # No single-sample leaves
+            max_features='sqrt',     # ~4 features per tree for diversity
+            class_weight='balanced', # Handle win/loss imbalance
             bootstrap=True,
-            oob_score=True,  # Out-of-bag score for validation
-            class_weight='balanced',  # Handle imbalanced profitable/unprofitable trades
-            random_state=42,
-            n_jobs=-1
+            oob_score=True,
+            n_jobs=-1,
         )
-        
+
         self.model.fit(X_train_scaled, y_train)
-        
+
         # Evaluate
         train_score = self.model.score(X_train_scaled, y_train)
         test_score = self.model.score(X_test_scaled, y_test)
-        
-        # Get feature importances (38 features total)
-        feature_names = [
-            'RSI', 'MACD', 'MACD_Signal', 'BB_Upper', 'BB_Lower', 'BB_Middle', 
-            'Volume', 'Price_Change', 'Volatility', 'Side',
-            'RSI_Oversold', 'RSI_Overbought', 'RSI_Neutral',
-            'MACD_Strength', 'MACD_Bullish',
-            'BB_Width', 'BB_Position',
-            'Trend_Strength', 'Trend_Direction',
-            'High_Volatility', 'Low_Volatility',
-            'Volume_Normalized',
-            'RSI_MACD_Alignment', 'Volatility_Volume_Ratio',
-            'Portfolio_Diversity_Score', 'Portfolio_Max_Concentration',
-            'Portfolio_Unique_Symbols', 'Portfolio_Total_Positions',
-            'Symbol_Concentration_Before', 'Symbol_Concentration_After',
-            'Is_In_Drawdown', 'Drawdown_Severity',
-            'Is_Volatility_Spike', 'Volatility_Regime',
-            'Is_High_Loss_Condition', 'Recent_Loss_Streak',
-            'Similar_Past_Losses', 'Loss_Pattern_Score'
-        ]
-        importances = dict(zip(feature_names, self.model.feature_importances_.tolist()))
-        
+
+        # Overfit detection: flag if train >> test accuracy
+        overfit_gap = train_score - test_score
+        if overfit_gap > 0.15:
+            logger.warning(f'Possible overfitting: train={train_score:.2%}, test={test_score:.2%}, gap={overfit_gap:.2%}')
+
+        importances = dict(zip(FEATURE_NAMES, self.model.feature_importances_.tolist()))
+
         # Save model
         self.save_model()
-        
+
         metrics = {
             'success': True,
+            'model_version': self.model_version,
             'timestamp': datetime.now().isoformat(),
             'trades_count': len(trades),
             'training_samples': len(X_train),
             'test_samples': len(X_test),
             'train_accuracy': float(train_score),
             'test_accuracy': float(test_score),
+            'overfit_gap': float(overfit_gap),
+            'overfit_warning': overfit_gap > 0.15,
             'feature_importances': importances,
-            'profitable_ratio': float(np.mean(y)) if y is not None and len(y) > 0 else 0.0
+            'profitable_ratio': float(np.mean(y)) if y is not None and len(y) > 0 else 0.0,
         }
-        
+
         # Save metrics
         import json
         with open(self.metrics_path, 'w', encoding='utf-8') as f:
             json.dump(metrics, f, indent=2)
-        
+
         # Write learning log
         self.write_learning_log(metrics, trades)
-        
-        logger.info(f'Model trained successfully: Train={train_score:.2%}, Test={test_score:.2%}')
-        
+
+        logger.info(f'Model v{self.model_version} trained: Train={train_score:.2%}, Test={test_score:.2%}, Gap={overfit_gap:.2%}')
+
         return metrics
     
     def predict(self, features):
