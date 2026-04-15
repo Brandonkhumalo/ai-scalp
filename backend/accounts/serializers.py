@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'full_name', 'phone',
             'ai_trading_enabled', 'autonomous_trading_enabled',
-            'ml_bootstrap_mode', 'approval_status', 'roles',
+            'ml_bootstrap_mode', 'approval_status', 'capital_use_demo', 'roles',
         ]
         read_only_fields = fields
 
@@ -31,5 +31,5 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['user_id', 'email', 'full_name', 'phone']
+        fields = ['user_id', 'email', 'full_name', 'phone', 'capital_use_demo']
         read_only_fields = fields

@@ -159,7 +159,7 @@ npm run dev
 # Backend
 cd backend
 pip install -r requirements.txt
-cp .env.example .env  # Add your DJANGO_SECRET_KEY and ALPACA_API_KEY/SECRET
+cp .env.example .env  # Add your DJANGO_SECRET_KEY + Capital demo/live credentials
 python manage.py migrate
 python manage.py runserver
 
@@ -170,17 +170,80 @@ python manage.py run_autonomous_agent --interval 15
 ### Environment Variables
 ```
 DJANGO_SECRET_KEY=           # Required — Django will refuse to start without it
-ALPACA_API_KEY=              # Alpaca paper trading API key
-ALPACA_API_SECRET=           # Alpaca paper trading API secret
+BROKER_PROVIDER=capital      # capital (default) or alpaca (legacy fallback)
+CAPITAL_TRADING_MODE=demo    # demo or live
+CAPITAL_DEMO_API_KEY=        # Capital demo API key
+CAPITAL_DEMO_IDENTIFIER=     # Capital demo login identifier/email
+CAPITAL_DEMO_PASSWORD=       # Capital demo password
+CAPITAL_DEMO_BASE_URL=https://demo-api-capital.backend-capital.com
+CAPITAL_LIVE_API_KEY=        # Capital live API key
+CAPITAL_LIVE_IDENTIFIER=     # Capital live login identifier/email
+CAPITAL_LIVE_PASSWORD=       # Capital live password
+CAPITAL_LIVE_BASE_URL=https://api-capital.backend-capital.com
+# Optional generic fallback credentials (used if mode-specific values are blank):
+CAPITAL_API_KEY=
+CAPITAL_IDENTIFIER=
+CAPITAL_PASSWORD=
+CAPITAL_BASE_URL=
 DATABASE_URL=                # PostgreSQL connection string (optional — defaults to SQLite)
 DEBUG=True                   # Set False in production
+USE_GO_MARKETD=False         # Phase flag for Go marketd cutover
 ```
+
+### marketd (Go, Shadow Mode)
+The repository now includes a Tier-1 Go service scaffold at `go/marketd` for:
+- market-hours checks
+- scalping target loop
+- position reconciliation loop
+- Alpaca client + rate limiting
+
+Run it in non-writing shadow mode:
+
+```bash
+cd go/marketd
+cp .env.example .env
+set -a; source .env; set +a
+make run-shadow
+```
+
+Operational docs:
+- `docs/go-port/contract.md`
+- `docs/go-port/postgres-migration-runbook.md`
+- `docs/go-port/systemd-marketd.service`
 
 ### Tests
 ```bash
 cd backend
 python manage.py test api.tests -v2    # 17 tests covering P&L, caching, serializers, state persistence
 ```
+
+### Validation Pipeline (New)
+Run these before trusting ML metrics or deploying strategy changes:
+
+```bash
+cd backend
+
+# 1) Audit data integrity (duplicates, side/status casing, P&L mismatches)
+python manage.py audit_trade_data --output-json backend/reports/data_audit.json
+
+# Optional: normalize symbol/side/status casing in-place
+python manage.py audit_trade_data --apply-normalization
+
+# 2) Walk-forward out-of-sample validation with execution costs
+python manage.py run_walk_forward_validation \
+  --min-train-trades 40 \
+  --test-size 20 \
+  --step-size 20 \
+  --spread-bps 2 \
+  --slippage-bps 3 \
+  --commission-per-share 0.0035
+```
+
+The walk-forward command writes a JSON report to `backend/reports/` with:
+- Fold-by-fold train/test windows (chronological, no leakage)
+- Baseline vs ML-gated out-of-sample metrics
+- Net P&L after spread/slippage/commission assumptions
+- Deployment gate checks (`deployment_ready`) for objective go/no-go decisions
 
 ---
 

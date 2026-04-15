@@ -1,0 +1,22 @@
+# Copy this file to terraform.tfvars and fill in your values.
+
+project_name       = "ai-scalp"
+aws_region         = "us-east-1"
+ec2_instance_type  = "t3.small"
+db_instance_class  = "db.t3.micro"
+db_allocated_storage = 20
+
+# Create these first on your machine:
+# ssh-keygen -t ed25519 -f ~/.ssh/ai-scalp-aws
+key_pair_name   = "ai-scalp-key"
+public_key_path = "~/.ssh/ai-scalp-aws.pub"
+
+# SECURITY: lock this to your own public IP in CIDR format, e.g. "203.0.113.10/32"
+ssh_allowed_cidr = "0.0.0.0/0"
+
+# This controls both website and API access over EC2 port 80.
+web_allowed_cidr = "0.0.0.0/0"
+
+db_name     = "ai_scalp"
+db_username = "ai_scalp_admin"
+db_password = "replace-with-strong-password"

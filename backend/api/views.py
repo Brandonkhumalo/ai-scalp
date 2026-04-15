@@ -530,7 +530,7 @@ class CloseProfitableTradesView(APIView):
             alpaca_service = _alpaca_singleton
             
             # Get live Alpaca positions (what the user sees on dashboard)
-            positions = alpaca_service.get_positions() or []
+            positions = alpaca_service.get_positions(user=request.user) or []
             
             if not positions:
                 return Response({
@@ -567,14 +567,14 @@ class CloseProfitableTradesView(APIView):
                 try:
                     # CRITICAL FIX: Cancel any existing orders for this symbol first
                     # (Alpaca won't let you close positions with pending orders)
-                    open_orders = alpaca_service.get_orders(status='open', limit=500)
+                    open_orders = alpaca_service.get_orders(status='open', limit=500, user=request.user)
                     if open_orders:
                         symbol_orders = [o for o in open_orders if o.get('symbol') == symbol]
                         if symbol_orders:
                             logger.info(f"Found {len(symbol_orders)} open orders for {symbol}. Canceling them first...")
                             for order in symbol_orders:
                                 order_id = order.get('id')
-                                cancel_result = alpaca_service.cancel_order(order_id)
+                                cancel_result = alpaca_service.cancel_order(order_id, user=request.user)
                                 logger.info(f"Canceled order {order_id}: {cancel_result}")
                     
                     # Close position via Alpaca API (market order)
@@ -587,7 +587,8 @@ class CloseProfitableTradesView(APIView):
                         symbol=symbol,
                         qty=qty,
                         side=close_side,
-                        order_type='market'
+                        order_type='market',
+                        user=request.user,
                     )
                     
                     logger.info(f"Alpaca order_result for {symbol}: {order_result}")
@@ -611,7 +612,8 @@ class CloseProfitableTradesView(APIView):
                         position_confirmed_closed = alpaca_service.verify_position_closed(
                             symbol=symbol,
                             max_retries=3,
-                            retry_delay=2.0
+                            retry_delay=2.0,
+                            user=request.user,
                         )
                         
                         if position_confirmed_closed:
@@ -789,7 +791,7 @@ class BalanceHistoryView(APIView):
         
         # Get current Alpaca equity for balance calculation
         alpaca_service = _alpaca_singleton
-        current_balance = float(alpaca_service.get_equity() or 100000)
+        current_balance = float(alpaca_service.get_equity(user=request.user) or 100000)
         
         # Calculate running balance
         for item in history:
@@ -798,7 +800,7 @@ class BalanceHistoryView(APIView):
             item['balance_before'] = current_balance
         
         return Response({
-            'current_balance': float(alpaca_service.get_equity() or 100000),
+            'current_balance': float(alpaca_service.get_equity(user=request.user) or 100000),
             'history': history
         }, status=status.HTTP_200_OK)
 
@@ -915,7 +917,7 @@ class ToggleAutonomousAgentView(APIView):
         if not enabled:
             try:
                 alpaca_service = _alpaca_singleton
-                positions = alpaca_service.get_positions() or []
+                positions = alpaca_service.get_positions(user=user) or []
                 
                 if positions:
                     # Wrap entire close operation in atomic transaction
@@ -933,11 +935,11 @@ class ToggleAutonomousAgentView(APIView):
                             
                             try:
                                 # Cancel any pending orders for this symbol
-                                open_orders = alpaca_service.get_orders(status='open', limit=500)
+                                open_orders = alpaca_service.get_orders(status='open', limit=500, user=user)
                                 if open_orders:
                                     symbol_orders = [o for o in open_orders if o.get('symbol') == symbol]
                                     for order in symbol_orders:
-                                        alpaca_service.cancel_order(order.get('id'))
+                                        alpaca_service.cancel_order(order.get('id'), user=user)
                                 
                                 # Close position
                                 close_side = 'sell' if side == 'long' else 'buy'
@@ -945,7 +947,8 @@ class ToggleAutonomousAgentView(APIView):
                                     symbol=symbol,
                                     qty=qty,
                                     side=close_side,
-                                    order_type='market'
+                                    order_type='market',
+                                    user=user,
                                 )
                                 
                                 if order_result and order_result.get('id'):
@@ -957,7 +960,7 @@ class ToggleAutonomousAgentView(APIView):
                                         user=user,
                                         symbol=symbol,
                                         instrument_type='stock',
-                                        broker='alpaca_sim',
+                                        broker='capital_stock',
                                         side='buy' if side == 'long' else 'sell',
                                         quantity=Decimal(str(qty)),
                                         entry_price=Decimal(str(avg_entry_price)),
@@ -1009,7 +1012,7 @@ class ManualAITradingView(APIView):
         symbol = request.data.get('symbol')
         instrument_type = request.data.get('instrument_type', 'stock')
         
-        valid_brokers = ['alpaca_sim'] #THIS IS WHERE THE MANUAL AI TRADING IS ENABLED
+        valid_brokers = ['capital_stock', 'alpaca_sim']  # Capital primary, Alpaca legacy fallback
         if broker not in valid_brokers:
             return Response({
                 'error': f'Invalid broker. Must be one of: {", ".join(valid_brokers)}'
@@ -1112,7 +1115,7 @@ class AlpacaAccountView(APIView):
             force_refresh = request.query_params.get('force_refresh', 'false').lower() == 'true'
             
             # Get account info (cached for 30 seconds unless force refresh)
-            account_info = alpaca_service.get_account_info(force_refresh=force_refresh)
+            account_info = alpaca_service.get_account_info(force_refresh=force_refresh, user=request.user)
             
             if not account_info:
                 return Response({
@@ -1120,7 +1123,7 @@ class AlpacaAccountView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Get positions (cached for 10 seconds unless force refresh)
-            positions = alpaca_service.get_positions(force_refresh=force_refresh)
+            positions = alpaca_service.get_positions(force_refresh=force_refresh, user=request.user)
             
             # Calculate total position value and unrealized P&L
             total_position_value = 0
@@ -1315,7 +1318,7 @@ class PerformanceAnalyticsView(APIView):
             
             # Calculate ROI based on initial capital
             alpaca_service = _alpaca_singleton
-            account_info = alpaca_service.get_account_info()
+            account_info = alpaca_service.get_account_info(user=request.user)
             current_equity = float(account_info.get('equity', 100000)) if account_info else 100000
             initial_capital = current_equity - net_pnl
             roi = (net_pnl / initial_capital) * 100 if initial_capital > 0 else 0

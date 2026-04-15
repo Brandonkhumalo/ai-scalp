@@ -7,7 +7,6 @@ from .views import (
 )
 from .alpaca_service import AlpacaMarketDataView
 from .ai_trading_engine import AITradingView
-#from .views_market import MarketDataView
 from .views_ml import MLModelView
 from .admin_views import (
     get_all_users, approve_user, reject_user,
@@ -34,7 +33,6 @@ urlpatterns = [
     path('remove-role/', RemoveRoleView.as_view(), name='remove_role'),
     path('alpaca-market-data/', AlpacaMarketDataView.as_view(), name='alpaca_market_data'),
     path('ai-trading/', AITradingView.as_view(), name='ai_trading'),
-    #path('market-data/', MarketDataView.as_view(), name='market_data'),
     path('ml-model/', MLModelView.as_view(), name='ml_model'),
     path('admin/users/', get_all_users, name='admin_users'),
     path('admin/users/<int:user_id>/approve/', approve_user, name='admin_approve_user'),

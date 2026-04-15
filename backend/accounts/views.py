@@ -177,9 +177,9 @@ class ToggleAITradingView(APIView):
                 import time
                 
                 logger.info(f"Stopping AI for {user.email}: Canceling orders and closing positions")
-                alpaca_service.cancel_all_orders()
+                alpaca_service.cancel_all_orders(user=user)
                 
-                positions = alpaca_service.get_positions() or []
+                positions = alpaca_service.get_positions(user=user) or []
                 closed_symbols = []
                 
                 if positions:
@@ -197,7 +197,8 @@ class ToggleAITradingView(APIView):
                                 qty=qty,
                                 side=close_side,
                                 order_type='market',
-                                time_in_force=tif
+                                time_in_force=tif,
+                                user=user,
                             )
                             logger.info(f"Closed {symbol}: {side} {qty} shares")
                             closed_symbols.append(symbol)
@@ -211,7 +212,7 @@ class ToggleAITradingView(APIView):
                         
                         # Fetch account activities to get actual fill prices
                         try:
-                            activities = alpaca_service.get_account_activities(activity_types='FILL', limit=100)
+                            activities = alpaca_service.get_account_activities(activity_types='FILL', limit=100, user=user)
                             
                             # Process each closed symbol
                             for symbol in closed_symbols:
@@ -283,4 +284,57 @@ class ToggleAITradingView(APIView):
         return Response({
             'ai_trading_enabled': user.ai_trading_enabled,
             'message': f'AI trading {"enabled" if enabled else "disabled"} successfully'
+        }, status=status.HTTP_200_OK)
+
+
+class CapitalCredentialsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        use_demo = bool(getattr(request.user, 'capital_use_demo', True))
+        return Response({
+            'capital_use_demo': use_demo,
+            'capital_trading_mode': 'demo' if use_demo else 'live',
+            'capital_api_key': '',
+            'capital_username': '',
+            'capital_password': '',
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        # Backward-compatible no-op path for legacy frontend credential forms.
+        if any(k in request.data for k in ('capital_api_key', 'capital_username', 'capital_password')):
+            return Response({
+                'message': 'Credentials are environment-managed on server. Only trading mode toggle is persisted per user.',
+                'capital_use_demo': bool(getattr(request.user, 'capital_use_demo', True)),
+                'capital_trading_mode': 'demo' if bool(getattr(request.user, 'capital_use_demo', True)) else 'live',
+            }, status=status.HTTP_200_OK)
+
+        if 'capital_use_demo' not in request.data:
+            return Response({
+                'error': 'capital_use_demo is required',
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        use_demo = bool(request.data.get('capital_use_demo'))
+        user = request.user
+        user.capital_use_demo = use_demo
+        user.save(update_fields=['capital_use_demo', 'updated_at'])
+
+        logger.info(
+            "Updated Capital mode for %s: %s",
+            user.email,
+            'demo' if use_demo else 'live',
+        )
+        return Response({
+            'capital_use_demo': user.capital_use_demo,
+            'capital_trading_mode': 'demo' if user.capital_use_demo else 'live',
+            'message': f"Capital.com mode set to {'demo' if user.capital_use_demo else 'live'}",
+        }, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        request.user.capital_use_demo = True
+        request.user.save(update_fields=['capital_use_demo', 'updated_at'])
+        return Response({
+            'capital_use_demo': True,
+            'capital_trading_mode': 'demo',
+            'message': 'Capital.com mode reset to demo',
         }, status=status.HTTP_200_OK)

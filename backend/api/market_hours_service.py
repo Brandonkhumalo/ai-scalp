@@ -19,7 +19,7 @@ class MarketHoursService:
             'open': time(9, 30),
             'close': time(16, 0),
             'days': [0, 1, 2, 3, 4],  # Monday-Friday
-            'broker': 'alpaca',
+            'broker': 'capital',
             'stocks': ['US']
         }
     }
@@ -126,7 +126,7 @@ class MarketHoursService:
     
     @classmethod
     def get_active_brokers(cls) -> Set[str]:
-        """Get set of active brokers (always returns 'alpaca' when US market is open)"""
+        """Get set of active brokers (returns 'capital' when US market is open)."""
         open_markets = cls.get_open_markets()
         brokers = set()
         

@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from api.models import Trade
 from api.alpaca_account_service import AlpacaAccountService
+from api.ml_training_service import MLTradingModel
 from collections import defaultdict
 from decimal import Decimal
 from dateutil import parser
@@ -238,9 +239,14 @@ class Command(BaseCommand):
         # Show final database state
         total_closed = Trade.objects.filter(user=user, status='closed').count()
         self.stdout.write(f'\n📊 Total closed trades in database: {total_closed}')
-        
-        if total_closed >= 5:
-            self.stdout.write(self.style.SUCCESS(f'✅ Sufficient data for ML training ({total_closed} ≥ 5)'))
+
+        min_required = MLTradingModel().min_trades_for_training
+        if total_closed >= min_required:
+            self.stdout.write(self.style.SUCCESS(
+                f'✅ Sufficient data for ML training ({total_closed} ≥ {min_required})'
+            ))
             self.stdout.write('\n🤖 Next step: Run ML training to improve AI confidence')
         else:
-            self.stdout.write(self.style.WARNING(f'⚠️  Still need more trades for ML training ({total_closed} < 5)'))
+            self.stdout.write(self.style.WARNING(
+                f'⚠️  Still need more trades for ML training ({total_closed} < {min_required})'
+            ))

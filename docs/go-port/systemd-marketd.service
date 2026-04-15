@@ -1,0 +1,16 @@
+[Unit]
+Description=ai-scalp marketd service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ai-scalp/go/marketd
+EnvironmentFile=/opt/ai-scalp/go/marketd/.env
+ExecStart=/opt/ai-scalp/go/marketd/marketd
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

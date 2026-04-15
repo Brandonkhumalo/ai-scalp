@@ -25,6 +25,7 @@ import { formatCurrency, formatNumber } from "@/lib/formatters";
 const Profile = () => {
   const [profile, setProfile] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [capitalModeUpdating, setCapitalModeUpdating] = useState(false);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -70,6 +71,26 @@ const Profile = () => {
         description: "Could not update profile",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleCapitalModeToggle = async (useDemo: boolean) => {
+    setCapitalModeUpdating(true);
+    try {
+      await apiClient.toggleCapitalDemoMode(useDemo);
+      setProfile((prev: any) => ({ ...prev, capital_use_demo: useDemo }));
+      toast({
+        title: "Trading Mode Updated",
+        description: `Capital.com mode set to ${useDemo ? "Demo" : "Live"}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Mode Switch Failed",
+        description: error?.message || "Could not switch Capital.com mode",
+        variant: "destructive",
+      });
+    } finally {
+      setCapitalModeUpdating(false);
     }
   };
 
@@ -223,6 +244,24 @@ const Profile = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="flex items-center justify-between rounded-lg border border-border p-4 mb-4">
+                <div>
+                  <div className="font-semibold">Capital.com Trading Mode</div>
+                  <div className="text-sm text-muted-foreground">
+                    {profile.capital_use_demo ? "Demo account (safe testing)" : "Live account (real funds)"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">Demo</span>
+                  <Switch
+                    checked={!profile.capital_use_demo}
+                    disabled={capitalModeUpdating}
+                    onCheckedChange={(checked) => handleCapitalModeToggle(!checked)}
+                    aria-label="Toggle Capital.com demo/live mode"
+                  />
+                  <span className="text-xs text-muted-foreground">Live</span>
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Button variant="outline" className="justify-start">
                   <Shield className="h-4 w-4 mr-2" />

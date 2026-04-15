@@ -43,6 +43,8 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<any>(null);
   const [alpacaAccount, setAlpacaAccount] = useState<any>(null);
   const [alpacaError, setAlpacaError] = useState<boolean>(false);
+  const [capitalUseDemo, setCapitalUseDemo] = useState<boolean>(true);
+  const [capitalModeUpdating, setCapitalModeUpdating] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const navigate = useNavigate();
@@ -75,6 +77,7 @@ const Dashboard = () => {
         // Get profile data
         const profileData = await apiClient.getProfile();
         setProfile(profileData);
+        setCapitalUseDemo(profileData?.capital_use_demo ?? true);
         
         // Get Alpaca account data
         try {
@@ -98,6 +101,7 @@ const Dashboard = () => {
         try {
           const profileData = await apiClient.getProfile();
           setProfile(profileData);
+          setCapitalUseDemo(profileData?.capital_use_demo ?? true);
           
           // Also refresh Alpaca balance
           try {
@@ -120,6 +124,27 @@ const Dashboard = () => {
   const handleLogout = async () => {
     await apiClient.logout();
     navigate("/");
+  };
+
+  const toggleCapitalMode = async () => {
+    const nextMode = !capitalUseDemo;
+    setCapitalModeUpdating(true);
+    try {
+      await apiClient.toggleCapitalDemoMode(nextMode);
+      setCapitalUseDemo(nextMode);
+      toast({
+        title: "Trading Mode Updated",
+        description: `Capital.com mode set to ${nextMode ? "Demo" : "Live"}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Mode Switch Failed",
+        description: error?.message || "Could not switch Capital.com mode",
+        variant: "destructive",
+      });
+    } finally {
+      setCapitalModeUpdating(false);
+    }
   };
 
   const handleCloseTrade = async (trade: any) => {
@@ -323,7 +348,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <Card className="p-6 bg-card border-border border-l-4 border-l-blue-500">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Alpaca Balance</span>
+              <span className="text-sm text-muted-foreground">Capital Balance</span>
               <Activity className="h-4 w-4 text-blue-500" />
             </div>
             <div className="text-3xl font-bold">
@@ -336,8 +361,18 @@ const Dashboard = () => {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              {alpacaError ? 'Failed to fetch Alpaca data' : alpacaAccount?.account ? `Equity: ${formatCurrency(parseFloat(alpacaAccount.account.equity || 0))}` : 'Live stock trading balance'}
+              {alpacaError ? 'Failed to fetch Capital data' : alpacaAccount?.account ? `Equity: ${formatCurrency(parseFloat(alpacaAccount.account.equity || 0))}` : 'Live stock trading balance'}
             </p>
+            <div className="mt-3">
+              <Button
+                variant={capitalUseDemo ? "secondary" : "destructive"}
+                size="sm"
+                disabled={capitalModeUpdating}
+                onClick={toggleCapitalMode}
+              >
+                {capitalModeUpdating ? "Switching..." : `Mode: ${capitalUseDemo ? "Demo" : "Live"} (Switch)`}
+              </Button>
+            </div>
           </Card>
 
           <Card className="p-6 bg-card border-border">

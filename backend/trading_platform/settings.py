@@ -127,6 +127,7 @@ import dj_database_url
 
 # Use Railway PostgreSQL database if RAILWAY_DATABASE_URL is set
 RAILWAY_DATABASE_URL = os.getenv('DATABASE_URL')
+USE_GO_MARKETD = os.getenv('USE_GO_MARKETD', 'False') == 'True'
 
 if RAILWAY_DATABASE_URL:
     DATABASES = {

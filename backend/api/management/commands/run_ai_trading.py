@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.conf import settings
 from api.ai_trading_engine import AITradingEngine
 from api.position_reconciliation_service import PositionReconciliationService
 from api.models import Trade, TradableInstrument
@@ -262,14 +263,24 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('🤖 AI Trading Scheduler Started (Stock Rotation Mode)'))
         self.stdout.write('Monitoring users with AI trading enabled...')
         
-        alpaca_api_key = os.getenv('ALPACA_API_KEY')
-        alpaca_api_secret = os.getenv('ALPACA_API_SECRET')
-        
-        if not alpaca_api_key or not alpaca_api_secret:
-            self.stdout.write(self.style.ERROR('❌ Alpaca API credentials not configured'))
+        trading_mode = os.getenv('CAPITAL_TRADING_MODE', 'demo').strip().lower()
+        if trading_mode not in ('demo', 'live'):
+            trading_mode = 'demo'
+
+        if trading_mode == 'live':
+            capital_api_key = os.getenv('CAPITAL_LIVE_API_KEY') or os.getenv('CAPITAL_API_KEY')
+            capital_identifier = os.getenv('CAPITAL_LIVE_IDENTIFIER') or os.getenv('CAPITAL_IDENTIFIER')
+            capital_password = os.getenv('CAPITAL_LIVE_PASSWORD') or os.getenv('CAPITAL_PASSWORD')
+        else:
+            capital_api_key = os.getenv('CAPITAL_DEMO_API_KEY') or os.getenv('CAPITAL_API_KEY')
+            capital_identifier = os.getenv('CAPITAL_DEMO_IDENTIFIER') or os.getenv('CAPITAL_IDENTIFIER')
+            capital_password = os.getenv('CAPITAL_DEMO_PASSWORD') or os.getenv('CAPITAL_PASSWORD')
+
+        if not capital_api_key or not capital_identifier or not capital_password:
+            self.stdout.write(self.style.ERROR(f'❌ Capital.com API credentials not configured for mode={trading_mode}'))
             return
-        
-        engine = AITradingEngine(alpaca_api_key, alpaca_api_secret)
+
+        engine = AITradingEngine()
         reconciliation_service = PositionReconciliationService()
         rotation_manager = StockRotationManager()
         market_hours = MarketHoursService()
@@ -297,13 +308,16 @@ class Command(BaseCommand):
                                 self.stdout
                             )
                         
-                        reconcile_result = reconciliation_service.reconcile_user_positions(user, verbose=False)
-                        if reconcile_result.get('ghosts_removed', 0) > 0:
-                            self.stdout.write(
-                                self.style.WARNING(
-                                    f'🔄 Reconciled {user.email}: Removed {reconcile_result["ghosts_removed"]} ghost positions'
+                        if settings.USE_GO_MARKETD:
+                            self.stdout.write(f'⏭️  {user.email}: Skipping Django reconciliation (USE_GO_MARKETD=True)')
+                        else:
+                            reconcile_result = reconciliation_service.reconcile_user_positions(user, verbose=False)
+                            if reconcile_result.get('ghosts_removed', 0) > 0:
+                                self.stdout.write(
+                                    self.style.WARNING(
+                                        f"🔄 Reconciled {user.email}: Removed {reconcile_result['ghosts_removed']} ghost positions"
+                                    )
                                 )
-                            )
                         
                         # DISABLED: Automatic 24-hour ML retraining
                         # ML training is now manual-only via the dashboard "Train ML" button
@@ -327,15 +341,18 @@ class Command(BaseCommand):
                         #                 )
                         #             )
                         
-                        scalping_result = engine.check_scalping_targets(user)
-                        if scalping_result.get('action') == 'scalping_auto_close':
-                            self.stdout.write(
-                                self.style.SUCCESS(
-                                    f'💰 SCALPING: {user.email} - {scalping_result.get("message")}'
+                        if settings.USE_GO_MARKETD:
+                            self.stdout.write(f'⏭️  {user.email}: Skipping Django scalping closes (USE_GO_MARKETD=True)')
+                        else:
+                            scalping_result = engine.check_scalping_targets(user)
+                            if scalping_result.get('action') == 'scalping_auto_close':
+                                self.stdout.write(
+                                    self.style.SUCCESS(
+                                        f"💰 SCALPING: {user.email} - {scalping_result.get('message')}"
+                                    )
                                 )
-                            )
-                            for symbol in scalping_result.get('closed_symbols', []):
-                                rotation_manager.add_stock_to_rotation(user.id, symbol, self.stdout)
+                                for symbol in scalping_result.get('closed_symbols', []):
+                                    rotation_manager.add_stock_to_rotation(user.id, symbol, self.stdout)
                         
                         rotation_manager.check_manually_closed_trades(user.id, self.stdout)
                         
@@ -348,7 +365,7 @@ class Command(BaseCommand):
                         
                         state = rotation_manager._get_user_state(user.id)
                         if state.get('insufficient_funds_sleep'):
-                            account_info = engine.alpaca_account.get_account_info()
+                            account_info = engine.alpaca_account.get_account_info(user=user)
                             if account_info:
                                 current_buying_power = float(account_info.get('buying_power', 0))
                                 rotation_manager.check_funds_recovery(user.id, current_buying_power, self.stdout)

@@ -35,7 +35,7 @@ def check_scalping_targets(user, alpaca_headers):
             trades_to_close = []
 
             # Get Alpaca positions for fallback pricing when snapshots fail (rate limiting protection)
-            alpaca_positions = alpaca_service.get_positions() or []
+            alpaca_positions = alpaca_service.get_positions(user=user) or []
             alpaca_price_map = {pos['symbol']: float(pos.get('current_price', 0)) for pos in alpaca_positions}
 
             for trade in open_trades:
@@ -116,7 +116,7 @@ def check_scalping_targets(user, alpaca_headers):
                         # NOTE: close_position() may return None if position already closed (404)
                         # This is OK - verification step is the source of truth!
                         logger.info(f'📤 Submitting close order for {trade.symbol} (qty={trade.quantity})...')
-                        close_result = alpaca_service.close_position(trade.symbol)
+                        close_result = alpaca_service.close_position(trade.symbol, user=user)
 
                         if close_result:
                             logger.info(f'✅ Close order submitted for {trade.symbol}, order ID: {close_result.get("id", "unknown")}')
@@ -133,7 +133,8 @@ def check_scalping_targets(user, alpaca_headers):
                         is_closed = alpaca_service.verify_position_closed(
                             symbol=trade.symbol,
                             max_retries=3,
-                            retry_delay=1.0  # 1s, 2s, 4s exponential backoff
+                            retry_delay=1.0,  # 1s, 2s, 4s exponential backoff
+                            user=user,
                         )
 
                         if not is_closed:

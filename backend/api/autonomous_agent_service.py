@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db.models import Sum
+from django.conf import settings
 from decimal import Decimal
 
 from .market_hours_service import MarketHoursService
@@ -300,7 +301,7 @@ class AutonomousAgentService:
             try:
                 if trade.broker_deal_id:
                     # Check Alpaca for matching position
-                    positions = alpaca_service.get_positions() or []
+                    positions = alpaca_service.get_positions(user=user) or []
                     symbol_on_alpaca = any(
                         p.get('symbol') == trade.symbol for p in positions
                     )
@@ -454,22 +455,28 @@ class AutonomousAgentService:
             rotation_state = self._get_stock_rotation_state(user.id)
             
             # 🎯 SCALPING: Check and auto-close positions at profit/loss targets FIRST
-            scalping_result = ai_engine.check_scalping_targets(user)
-            if scalping_result.get('action') == 'scalping_auto_close':
-                logger.info(f"      🎯 Scalping: Closed {scalping_result.get('closed_count')} positions")
-                logger.info(f"         Realized P&L: ${scalping_result.get('total_realized_profit', 0):.2f}")
-                
-                # Add closed stocks back to rotation (wake up if sleeping)
-                closed_symbols = scalping_result.get('closed_symbols', [])
-                for symbol in closed_symbols:
-                    self._add_stock_to_rotation(user.id, symbol)
+            if settings.USE_GO_MARKETD:
+                logger.info(f"      ⏭️ Skipping Django scalping closes for {user.email} (USE_GO_MARKETD=True)")
+            else:
+                scalping_result = ai_engine.check_scalping_targets(user)
+                if scalping_result.get('action') == 'scalping_auto_close':
+                    logger.info(f"      🎯 Scalping: Closed {scalping_result.get('closed_count')} positions")
+                    logger.info(f"         Realized P&L: ${scalping_result.get('total_realized_profit', 0):.2f}")
+
+                    # Add closed stocks back to rotation (wake up if sleeping)
+                    closed_symbols = scalping_result.get('closed_symbols', [])
+                    for symbol in closed_symbols:
+                        self._add_stock_to_rotation(user.id, symbol)
             
             # 📋 Check for manually closed trades and add them back to rotation
             self._check_manually_closed_trades(user.id)
             
             # 🔍 RECONCILIATION: Verify database positions match Alpaca reality
             if self.agent_state['total_checks'] % user_state['reconciliation_interval'] == 0:
-                self._run_position_reconciliation(user, ai_engine, user_state)
+                if settings.USE_GO_MARKETD:
+                    logger.info(f"      ⏭️ Skipping Django reconciliation for {user.email} (USE_GO_MARKETD=True)")
+                else:
+                    self._run_position_reconciliation(user, ai_engine, user_state)
             
             # 💤 STOCK ROTATION SLEEP MODE CHECK
             # Initialize stocks if session not yet initialized
@@ -738,7 +745,7 @@ class AutonomousAgentService:
         """
         # Get current Alpaca account equity for daily loss limit calculation
         from api.services import alpaca_service
-        alpaca_equity = float(alpaca_service.get_equity() or 100000)
+        alpaca_equity = float(alpaca_service.get_equity(user=user) or 100000)
         
         daily_loss_limit = alpaca_equity * 0.08
         

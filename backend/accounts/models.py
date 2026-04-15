@@ -12,6 +12,10 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True, null=True)
     full_name = models.CharField(max_length=255, blank=True)
     ai_trading_enabled = models.BooleanField(default=False)
+    capital_use_demo = models.BooleanField(
+        default=True,
+        help_text='Use Capital.com demo account (True) or live account (False).'
+    )
     autonomous_trading_enabled = models.BooleanField(default=False, help_text='Enable 24/7 autonomous trading agent that executes trades automatically during market hours')
     ml_bootstrap_mode = models.BooleanField(default=True, help_text='Bootstrap mode: allows AI trading without ML model (uses technical analysis only). Auto-disables once ML model is trained.')
     approval_status = models.CharField(max_length=20, choices=APPROVAL_STATUS_CHOICES, default='pending')

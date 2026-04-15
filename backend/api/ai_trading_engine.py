@@ -31,15 +31,16 @@ logger = logging.getLogger(__name__)
 
 
 class AITradingEngine:
-    """AI Trading Engine for automated Alpaca stock trading"""
-    
-    def __init__(self, alpaca_api_key, alpaca_api_secret):
+    """AI Trading Engine for automated broker trading (Capital/Alpaca via service singleton)."""
+
+    def __init__(self, alpaca_api_key=None, alpaca_api_secret=None):
+        # Kept for backwards compatibility with existing call sites.
         self.alpaca_api_key = alpaca_api_key
         self.alpaca_api_secret = alpaca_api_secret
         self.alpaca_data_url = 'https://data.alpaca.markets'
         self.alpaca_trading_url = 'https://api.alpaca.markets'
-        
-        # Use shared singleton for caching and request prioritization
+
+        # Use shared broker singleton (Capital by default).
         from api.services import alpaca_service
         self.alpaca_account = alpaca_service
         
@@ -342,25 +343,19 @@ class AITradingEngine:
                 logger.info(f"Rule Engine blocked trade for {symbol}: {rules_reason}")
                 return {'success': False, 'message': rules_reason, 'analysis': analysis}
             
-            # *** ALPACA STOCK TRADING ONLY ***
-            # Get Alpaca headers for placing orders (stocks only)
-            headers = self.get_alpaca_headers()
-            
-            # *** USE LIVE ALPACA BALANCE (WITH CACHING) ***
-            # Get real-time account data from Alpaca API (cached for 30s)
-            account_info = self.alpaca_account.get_account_info()
+            # *** USE LIVE BROKER BALANCE (WITH CACHING) ***
+            account_info = self.alpaca_account.get_account_info(user=user)
             if not account_info:
-                logger.error(f'Failed to fetch Alpaca account info for user {user.id}')
+                logger.error(f'Failed to fetch broker account info for user {user.id}')
                 return {
                     'success': False,
-                    'message': 'Unable to fetch account balance from Alpaca. Please try again.'
+                    'message': 'Unable to fetch broker account balance. Please try again.'
                 }
             
-            # Use Alpaca buying power as user balance
+            # Use broker buying power as user balance
             user_balance = float(account_info.get('buying_power', '0'))
             account_equity = float(account_info.get('equity', '0'))
-            
-            logger.info(f'Alpaca account: buying_power=${user_balance:.2f}, equity=${account_equity:.2f}')
+            logger.info(f'Broker account: buying_power=${user_balance:.2f}, equity=${account_equity:.2f}')
             
             # Check if daily loss exceeds 8% limit (based on equity)
             daily_loss_limit = account_equity * 0.08
@@ -469,7 +464,7 @@ class AITradingEngine:
             
             logger.info(f'Setting bracket order for {symbol}: entry=${current_price:.2f}, stop_loss=${stop_loss_price:.2f}, take_profit=${take_profit_price:.2f}')
             
-            # ── Step 1: Create a PENDING trade before placing the Alpaca order ──
+            # ── Step 1: Create a PENDING trade before placing the broker order ──
             # This closes the divergence window — if the process crashes after the
             # Alpaca order but before the DB write, the pending row survives for
             # startup reconciliation.
@@ -492,7 +487,7 @@ class AITradingEngine:
 
                 trade = Trade.objects.create(
                     user=locked_user,
-                    broker='alpaca_sim',
+                    broker='capital_stock',
                     symbol=symbol,
                     side=analysis['signal'],
                     quantity=quantity,
@@ -524,16 +519,17 @@ class AITradingEngine:
                 stop_loss=stop_loss_price,
                 take_profit=take_profit_price,
                 limit_price=limit_price,
+                user=user,
             )
 
             if not alpaca_order:
                 # Order failed — mark the pending trade as failed
                 trade.status = 'failed'
                 trade.save(update_fields=['status'])
-                logger.error(f'Failed to place Alpaca order for {symbol}')
+                logger.error(f'Failed to place broker order for {symbol}')
                 return {
                     'success': False,
-                    'message': 'Failed to place order on Alpaca. Please try again.'
+                    'message': 'Failed to place order on broker. Please try again.'
                 }
 
             # ── Step 3: Promote pending → open with actual fill details ──
@@ -541,7 +537,7 @@ class AITradingEngine:
             filled_price = alpaca_order.get('filled_avg_price', current_price)
             order_status = alpaca_order.get('status')
 
-            logger.info(f'Alpaca order placed: {order_id}, status={order_status}, qty={quantity}, price=${filled_price}')
+            logger.info(f'Broker order placed: {order_id}, status={order_status}, qty={quantity}, price=${filled_price}')
 
             trade.status = 'open'
             trade.entry_price = filled_price or current_price
@@ -559,7 +555,7 @@ class AITradingEngine:
                 'price': filled_price or current_price,
                 'confidence': analysis['confidence'],
                 'analysis': analysis,
-                'broker': 'Alpaca (Live API)'
+                'broker': 'Capital.com'
             }
             
         except Exception as e:
@@ -574,16 +570,26 @@ class AITradingView(APIView):
     
     def post(self, request):
         try:
-            alpaca_api_key = os.getenv('ALPACA_API_KEY')
-            alpaca_api_secret = os.getenv('ALPACA_API_SECRET')
-            
-            if not alpaca_api_key or not alpaca_api_secret:
+            trading_mode = os.getenv('CAPITAL_TRADING_MODE', 'demo').strip().lower()
+            if trading_mode not in ('demo', 'live'):
+                trading_mode = 'demo'
+
+            if trading_mode == 'live':
+                capital_api_key = os.getenv('CAPITAL_LIVE_API_KEY') or os.getenv('CAPITAL_API_KEY')
+                capital_identifier = os.getenv('CAPITAL_LIVE_IDENTIFIER') or os.getenv('CAPITAL_IDENTIFIER')
+                capital_password = os.getenv('CAPITAL_LIVE_PASSWORD') or os.getenv('CAPITAL_PASSWORD')
+            else:
+                capital_api_key = os.getenv('CAPITAL_DEMO_API_KEY') or os.getenv('CAPITAL_API_KEY')
+                capital_identifier = os.getenv('CAPITAL_DEMO_IDENTIFIER') or os.getenv('CAPITAL_IDENTIFIER')
+                capital_password = os.getenv('CAPITAL_DEMO_PASSWORD') or os.getenv('CAPITAL_PASSWORD')
+
+            if not capital_api_key or not capital_identifier or not capital_password:
                 return Response(
-                    {'error': 'Alpaca API credentials not configured'},
+                    {'error': f'Capital.com API credentials not configured for mode={trading_mode}'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
-            
-            engine = AITradingEngine(alpaca_api_key, alpaca_api_secret)
+
+            engine = AITradingEngine()
             
             action = request.data.get('action')
             
